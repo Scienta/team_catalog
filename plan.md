@@ -114,9 +114,9 @@ npm install -D tailwindcss @tailwindcss/vite
 - [x] Opprett `src/firebase.ts` — initialiser Firebase app, auth, og Firestore
 
 ### 3.2 Auth-lag
-- [ ] `src/hooks/useAuth.ts` — lytter på `onAuthStateChanged`, sjekker `admins/{uid}` i Firestore
-- [ ] `src/components/ProtectedRoute.tsx` — redirecter til `/login` hvis ikke autentisert admin
-- [ ] Sett opp React Router med routes: `/login`, `/`, `/consultant/:id`
+- [x] `src/hooks/useAuth.ts` — lytter på `onAuthStateChanged`, sjekker `admins/{uid}` i Firestore
+- [x] `src/components/ProtectedRoute.tsx` — redirecter til `/login` hvis ikke autentisert admin
+- [x] Sett opp React Router med routes: `/login`, `/`, `/consultant/:id`
 
 ### 3.3 Login-side (`/login`)
 - [ ] E-post og passord-felt
