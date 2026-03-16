@@ -1,52 +1,55 @@
 package com.scienta
 
-import com.google.cloud.Timestamp
 import com.resend.services.emails.model.CreateEmailOptions
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 suspend fun checkAndNotifyContracts(): Int {
     val firestore = getFirestore()
+    val today = LocalDate.now(ZoneOffset.UTC)
+    val fmt = DateTimeFormatter.ISO_LOCAL_DATE
 
-    // Today's range in UTC (midnight to midnight)
-    val todayStart = LocalDate.now(ZoneOffset.UTC).atStartOfDay(ZoneOffset.UTC).toInstant()
-    val todayEnd = todayStart.plusSeconds(86400)
+    // Fetch all consultants with both contractEnd and warningDays set
+    val allConsultants = firestore.collection("consultants").get().get().documents
 
-    val consultants = firestore.collection("consultants")
-        .whereGreaterThanOrEqualTo("warningDate", Timestamp.ofTimeSecondsAndNanos(todayStart.epochSecond, 0))
-        .whereLessThan("warningDate", Timestamp.ofTimeSecondsAndNanos(todayEnd.epochSecond, 0))
-        .get().get().documents
+    val toNotify = allConsultants.filter { doc ->
+        val contractEndStr = doc.getString("contractEnd") ?: return@filter false
+        val warningDays = doc.getLong("warningDays") ?: return@filter false
+        val contractEnd = runCatching { LocalDate.parse(contractEndStr, fmt) }.getOrNull() ?: return@filter false
+        contractEnd.minusDays(warningDays) == today
+    }
 
     var notified = 0
 
-    for (doc in consultants) {
+    for (doc in toNotify) {
         val name = doc.getString("name") ?: continue
-        val clientId = doc.getString("clientId")
-        val contractEnd = doc.getTimestamp("contractEnd")
+        val contractEndStr = doc.getString("contractEnd") ?: continue
+        val contractEnd = runCatching { LocalDate.parse(contractEndStr, fmt) }.getOrNull() ?: continue
+        val warningDays = doc.getLong("warningDays") ?: continue
+
         val notifyAll = doc.getBoolean("notifyAll") ?: true
         @Suppress("UNCHECKED_CAST")
         val notifyList = doc.get("notifyList") as? List<String> ?: emptyList()
 
-        val clientName = if (clientId != null) {
-            firestore.collection("clients").document(clientId).get().get()
-                .getString("name") ?: "ukjent kunde"
-        } else {
-            "ukjent kunde"
-        }
+        // Find client names via projects
+        val projects = firestore.collection("projects")
+            .whereArrayContains("consultantIds", doc.id)
+            .get().get().documents
+        val clientNames = projects.mapNotNull { p ->
+            val clientId = p.getString("clientId") ?: return@mapNotNull null
+            firestore.collection("clients").document(clientId).get().get().getString("name")
+        }.distinct()
+        val clientStr = clientNames.joinToString(", ").ifBlank { "ukjent kunde" }
 
-        val contractEndStr = contractEnd?.toDate()?.let {
-            java.text.SimpleDateFormat("dd.MM.yyyy").apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.format(it)
-        } ?: "ukjent dato"
+        val contractEndFormatted = contractEnd.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
 
         val recipients: List<String> = if (notifyAll) {
             firestore.collection("admins").get().get().documents
                 .mapNotNull { it.getString("email") }
         } else {
             notifyList.mapNotNull { uid ->
-                firestore.collection("admins").document(uid).get().get()
-                    .getString("email")
+                firestore.collection("admins").document(uid).get().get().getString("email")
             }
         }
 
@@ -54,14 +57,14 @@ suspend fun checkAndNotifyContracts(): Int {
 
         val emailBody = """
             <p>Hei,</p>
-            <p>Dette er en påminnelse om at kontrakten til <strong>$name</strong> hos <strong>$clientName</strong> utløper $contractEndStr.</p>
+            <p>Dette er en påminnelse om at kontrakten til <strong>$name</strong> hos <strong>$clientStr</strong> utløper om <strong>$warningDays dager</strong> ($contractEndFormatted).</p>
             <p>Logg inn for å se detaljer.</p>
         """.trimIndent()
 
         val emailRequest = CreateEmailOptions.builder()
             .from("onboarding@resend.dev")
             .to(recipients)
-            .subject("Kontraktsvarsel: $name")
+            .subject("Kontraktsvarsel: $name utløper om $warningDays dager")
             .html(emailBody)
             .build()
 

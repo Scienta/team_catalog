@@ -8,7 +8,7 @@ type Consultant = {
   photoUrl?: string
   contractStart?: string
   contractEnd?: string
-  warningDate?: string
+  warningDays?: number
   notifyAll?: boolean
   notifyList?: string[]
 }
@@ -25,7 +25,7 @@ export function ConsultantDetailPage() {
 
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
-  const [warningDate, setWarningDate] = useState('')
+  const [warningDays, setWarningDays] = useState<number | ''>('')
   const [notifyAll, setNotifyAll] = useState(true)
   const [notifyList, setNotifyList] = useState<string[]>([])
 
@@ -37,7 +37,7 @@ export function ConsultantDetailPage() {
       setConsultant(data)
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
-      setWarningDate(data.warningDate ?? '')
+      setWarningDays(data.warningDays ?? '')
       setNotifyAll(data.notifyAll ?? true)
       setNotifyList(data.notifyList ?? [])
     })
@@ -51,7 +51,7 @@ export function ConsultantDetailPage() {
     await updateDoc(doc(db, 'consultants', id), {
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
-      warningDate: warningDate || null,
+      warningDays: warningDays !== '' ? warningDays : null,
       notifyAll,
       notifyList: notifyAll ? [] : notifyList,
     })
@@ -98,9 +98,45 @@ export function ConsultantDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Varslingsdato</label>
-          <input type="date" value={warningDate} onChange={(e) => setWarningDate(e.target.value)} className={inputClass} />
+        <div className="flex flex-col gap-2">
+          <label className={labelClass}>Varsle X dager før kontraktslutt</label>
+          <div className="flex gap-2 flex-wrap">
+            {[7, 14, 30, 60, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setWarningDays(warningDays === d ? '' : d)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                  warningDays === d
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                    : 'bg-white dark:bg-transparent text-gray-500 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+                }`}
+              >
+                {d} dager
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              max={365}
+              placeholder="Egendefinert antall dager"
+              value={warningDays}
+              onChange={(e) => setWarningDays(e.target.value === '' ? '' : Number(e.target.value))}
+              className={inputClass}
+            />
+            {warningDays !== '' && (
+              <button type="button" onClick={() => setWarningDays('')} className="text-xs text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 whitespace-nowrap transition-colors">
+                Nullstill
+              </button>
+            )}
+          </div>
+          {warningDays !== '' && contractEnd && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Varsel sendes {new Date(new Date(contractEnd).getTime() - Number(warningDays) * 86400000).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long', year: 'numeric' })}
+            </p>
+          )}
         </div>
 
         <div className="h-px bg-gray-100 dark:bg-gray-800" />
