@@ -6,8 +6,6 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.coroutines.delay
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -39,20 +37,7 @@ suspend fun fetchFlowcaseUsers(apiKey: String): List<FlowcaseUser> {
     }
 }
 
-// Rate-limited photo fetch: 5 req/s = 200ms between requests
-// Photo URL is embedded in the user object from /users/search.
-// If Flowcase requires a separate call, replace this with the actual endpoint.
-suspend fun fetchPhotoUrls(
-    apiKey: String,
-    users: List<FlowcaseUser>
-): Map<String, String?> {
-    val result = mutableMapOf<String, String?>()
-    buildFlowcaseClient().use { client ->
-        for (user in users) {
-            // Image URL is already in the user search response
-            result[user.id] = user.image?.url
-            delay(200) // respect 5 req/s rate limit
-        }
-    }
-    return result
-}
+// Photo URL is embedded in the user object from /users/search (image.url).
+// Uploading photos uses POST /api/v1/users/<id>/image — no separate fetch needed.
+fun extractPhotoUrls(users: List<FlowcaseUser>): Map<String, String?> =
+    users.associate { it.id to it.image?.url }

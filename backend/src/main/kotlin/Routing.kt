@@ -28,7 +28,7 @@ fun Application.configureRouting(config: AppConfig) {
             call.authenticateFirebase() ?: return@post
 
             val users = fetchFlowcaseUsers(config.flowcaseApiKey)
-            val photoUrls = fetchPhotoUrls(config.flowcaseApiKey, users)
+            val photoUrls = extractPhotoUrls(users)
 
             val firestore = getFirestore()
             for (user in users) {
