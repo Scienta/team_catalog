@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build output
+build/
+dist/
+
+# Gradle
+.gradle/
+*.jar
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# IDE
+.idea/
+.DS_Store
