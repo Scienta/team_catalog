@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { db } from '../firebase'
@@ -199,21 +199,10 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
   const [contactPhone, setContactPhone] = useState(project.contactPhone ?? '')
   const [contactEmail, setContactEmail] = useState(project.contactEmail ?? '')
   const [saving, setSaving] = useState(false)
-  const [showPicker, setShowPicker] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
+  const [showConsultants, setShowConsultants] = useState(false)
 
   const assigned = allConsultants.filter((c) => project.consultantIds?.includes(c.id))
   const unassigned = allConsultants.filter((c) => !project.consultantIds?.includes(c.id))
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
 
   async function handleSave() {
     setSaving(true)
@@ -276,56 +265,62 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
           )}
 
           {/* Consultants */}
-          <div className="flex flex-wrap items-center gap-2 mt-1">
+          <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
+            {/* Assigned */}
             {assigned.map((c) => (
-              <div key={c.id} className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full pl-1.5 pr-2 py-1 group">
-                {c.photoUrl ? (
-                  <img src={c.photoUrl} alt={c.name} className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-400 text-[9px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
-                )}
-                <span className="text-xs text-gray-700 dark:text-gray-300">{c.name}</span>
+              <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 last:border-b-0 bg-gray-50/60 dark:bg-gray-800/30 group">
+                <div className="flex items-center gap-2.5">
+                  {c.photoUrl ? (
+                    <img src={c.photoUrl} alt={c.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-[10px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                  )}
+                  <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">{c.name}</span>
+                </div>
                 <button
                   onClick={() => handleRemoveConsultant(c.id)}
-                  className="ml-0.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 leading-none"
+                  className="text-xs text-gray-300 dark:text-gray-700 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 px-1"
                   title="Fjern fra prosjekt"
                 >
-                  ×
+                  Fjern
                 </button>
               </div>
             ))}
 
-            {/* Add consultant picker */}
-            <div className="relative" ref={pickerRef}>
-              <button
-                onClick={() => setShowPicker((v) => !v)}
-                className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 border border-dashed border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 rounded-full px-2.5 py-1 transition-colors"
-              >
-                + Legg til
-              </button>
-              {showPicker && (
-                <div className="absolute left-0 top-full mt-1 z-20 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-48 max-h-60 overflow-y-auto">
-                  {unassigned.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-600">Alle konsulenter er lagt til</p>
-                  ) : (
-                    unassigned.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => { handleAddConsultant(c.id); setShowPicker(false) }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                      >
-                        {c.photoUrl ? (
-                          <img src={c.photoUrl} alt={c.name} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-[10px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
-                        )}
-                        {c.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Divider + toggle */}
+            {unassigned.length > 0 && (
+              <>
+                <button
+                  onClick={() => setShowConsultants((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-t border-dashed border-gray-200 dark:border-gray-700"
+                >
+                  <span>{showConsultants ? 'Skjul' : `+ Legg til konsulenter (${unassigned.length} tilgjengelige)`}</span>
+                  <span className="text-gray-300 dark:text-gray-700">{showConsultants ? '▲' : '▼'}</span>
+                </button>
+                {showConsultants && unassigned.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      {c.photoUrl ? (
+                        <img src={c.photoUrl} alt={c.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0 opacity-60" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 dark:text-gray-600 text-[10px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                      )}
+                      <span className="text-sm text-gray-500 dark:text-gray-500">{c.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleAddConsultant(c.id)}
+                      className="text-xs font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      + Legg til
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {assigned.length === 0 && unassigned.length === 0 && (
+              <div className="px-3 py-4 text-xs text-gray-400 dark:text-gray-600 text-center">Ingen konsulenter</div>
+            )}
           </div>
         </div>
       )}
