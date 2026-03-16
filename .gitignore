@@ -17,6 +17,7 @@ dist/
 # Firebase
 .firebase/
 firebase-debug.log
+firebase-service-account.json
 
 # IDE
 .idea/

@@ -21,42 +21,42 @@ Scienta_team_catalog/
 ```
 
 ### 1.2 Git
-- [ ] Initialiser git i rot (`git init`)
-- [ ] Lag `.gitignore` (node_modules, .env, build/, .gradle/, *.jar)
-- [ ] Første commit med docs
+- [x] Initialiser git i rot (`git init`)
+- [x] Lag `.gitignore` (node_modules, .env, build/, .gradle/, *.jar)
+- [x] Første commit med docs
 - [ ] Push til Scienta GitHub org når invitasjon er mottatt
 
 ### 1.3 Firebase prosjekt
-- [ ] Opprett nytt Firebase-prosjekt på console.firebase.google.com
-- [ ] Aktiver **Firestore** (production mode)
-- [ ] Aktiver **Authentication** → Email/Password provider
-- [ ] Last ned **service account JSON** (til Ktor)
-- [ ] Legg til en admin-bruker manuelt: Firebase Console → Authentication → Add user
-- [ ] Opprett tilhørende dokument i `admins/{uid}` i Firestore
+- [x] Opprett nytt Firebase-prosjekt på console.firebase.google.com
+- [x] Aktiver **Firestore** (production mode)
+- [x] Aktiver **Authentication** → Email/Password provider
+- [x] Last ned **service account JSON** (til Ktor) → `backend/firebase-service-account.json`
+- [x] Legg til en admin-bruker manuelt: Firebase Console → Authentication → Add user
+- [x] Opprett tilhørende dokument i `admins/{uid}` i Firestore
 
 ### 1.4 Resend
-- [ ] Opprett konto på resend.com
-- [ ] Verifiser avsenderdomene (eller bruk `onboarding@resend.dev` for testing)
-- [ ] Generer API-nøkkel
+- [x] Opprett konto på resend.com
+- [ ] Verifiser avsenderdomene (gjøres ved produksjonssetting — bruker `onboarding@resend.dev` under utvikling)
+- [x] Generer API-nøkkel
 
 ---
 
 ## Fase 2: Backend — Ktor
 
 ### 2.1 Prosjektoppsett
-- [ ] Opprett Ktor-prosjekt via [start.ktor.io](https://start.ktor.io) med følgende plugins:
+- [x] Opprett Ktor-prosjekt via [start.ktor.io](https://start.ktor.io) med følgende plugins:
   - Routing
   - Content Negotiation (kotlinx.serialization)
   - Status Pages
-- [ ] Legg til avhengigheter i `build.gradle.kts`:
+- [x] Legg til avhengigheter i `build.gradle.kts`:
   - `firebase-admin` (Firebase Admin SDK)
-  - `resend-kotlin` eller Resend Java SDK
+  - `resend-java` (Resend Java SDK)
   - `ktor-server-netty`
   - `kotlinx-serialization-json`
   - Ktor HTTP-klient (for Flowcase-kall)
-- [ ] Konfigurer `shadowJar` / `fatJar` for Docker-bygg
-- [ ] Lag `Dockerfile`
-- [ ] Lag `.env.example` med alle nødvendige variabler
+- [x] Konfigurer `fatJar` for Docker-bygg
+- [x] Lag `Dockerfile`
+- [x] Lag `.env.example` med alle nødvendige variabler
 
 ### 2.2 Konfigurasjon og oppstart
 - [ ] Les miljøvariabler ved oppstart (`FLOWCASE_API_KEY`, `RESEND_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `SCHEDULER_SECRET`)
