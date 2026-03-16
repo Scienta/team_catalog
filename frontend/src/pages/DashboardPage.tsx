@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -31,16 +31,15 @@ export function DashboardPage() {
     return () => { u1(); u2(); u3() }
   }, [])
 
-  function getConsultantProjects(consultantId: string): Project[] {
-    return projects.filter((p) => p.consultantIds?.includes(consultantId))
-  }
-
   // Exclude internal employees from all stats
   const externalConsultants = consultants.filter((c) => !c.isInternal)
 
+  const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
+
   // Derived stats
-  const withProject = externalConsultants.filter((c) => getConsultantProjects(c.id).length > 0)
-  const withoutProject = externalConsultants.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
+  const withProject = externalConsultants.filter((c) => inAnyProject.has(c.id))
+  // "Uten prosjekt" = not in any project (includes client-only assigned — they still have no project)
+  const withoutProject = externalConsultants.filter((c) => !inAnyProject.has(c.id)).sort((a, b) => a.name.localeCompare(b.name))
 
   const withContract = withProject.filter((c) => c.contractEnd)
   const expiringSoon = withContract.filter((c) => { const d = daysUntil(c.contractEnd!); return d >= 0 && d <= 30 }).sort((a, b) => daysUntil(a.contractEnd!) - daysUntil(b.contractEnd!))
@@ -48,11 +47,13 @@ export function DashboardPage() {
   const activeOk = withContract.filter((c) => daysUntil(c.contractEnd!) > 30)
   const upcoming60 = withContract.filter((c) => { const d = daysUntil(c.contractEnd!); return d >= 0 && d <= 60 }).sort((a, b) => daysUntil(a.contractEnd!) - daysUntil(b.contractEnd!))
 
-  // Consultants per client
+  // Consultants per client: project-assigned + direct clientId (not in any project)
   const consultantsPerClient = clients.map((client) => {
     const clientProjects = projects.filter((p) => p.clientId === client.id)
-    const consultantIds = new Set(clientProjects.flatMap((p) => p.consultantIds ?? []))
-    return { client, count: consultantIds.size, projects: clientProjects }
+    const projectConsultantIds = new Set(clientProjects.flatMap((p) => p.consultantIds ?? []))
+    const directCount = externalConsultants.filter((c) => c.clientId === client.id && !inAnyProject.has(c.id)).length
+    const count = projectConsultantIds.size + directCount
+    return { client, count, projects: clientProjects }
   }).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
 
   // Pie chart data

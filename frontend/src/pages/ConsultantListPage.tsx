@@ -4,7 +4,7 @@ import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -72,9 +72,14 @@ export function ConsultantListPage() {
 
   function getClientNames(consultantId: string): string {
     const ps = getConsultantProjects(consultantId)
-    if (!ps.length) return '–'
-    const clientIds = [...new Set(ps.map((p) => p.clientId).filter(Boolean))]
-    return clientIds.map((cid) => clients.find((c) => c.id === cid)?.name).filter(Boolean).join(', ') || '–'
+    if (ps.length) {
+      const clientIds = [...new Set(ps.map((p) => p.clientId).filter(Boolean))]
+      return clientIds.map((cid) => clients.find((c) => c.id === cid)?.name).filter(Boolean).join(', ') || '–'
+    }
+    // Fall back to direct clientId assignment
+    const c = consultants.find((con) => con.id === consultantId)
+    if (c?.clientId) return clients.find((cl) => cl.id === c.clientId)?.name ?? '–'
+    return '–'
   }
 
   function getFilteredConsultants(): Consultant[] {
@@ -86,7 +91,11 @@ export function ConsultantListPage() {
       if (checkedForClient.length > 0) checkedForClient.forEach((p) => includedProjectIds.add(p.id))
       else clientProjects.forEach((p) => includedProjectIds.add(p.id))
     }
-    return consultants.filter((c) => getConsultantProjects(c.id).some((p) => includedProjectIds.has(p.id)))
+    const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
+    return consultants.filter((c) =>
+      getConsultantProjects(c.id).some((p) => includedProjectIds.has(p.id)) ||
+      (c.clientId && selectedClientIds.has(c.clientId) && !inAnyProject.has(c.id))
+    )
   }
 
   function toggleClient(clientId: string) {
