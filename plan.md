@@ -59,7 +59,7 @@ Scienta_team_catalog/
 - [x] Lag `.env.example` med alle nødvendige variabler
 
 ### 2.2 Konfigurasjon og oppstart
-- [ ] Les miljøvariabler ved oppstart (`FLOWCASE_API_KEY`, `RESEND_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `SCHEDULER_SECRET`)
+- [x] Les miljøvariabler ved oppstart (`FLOWCASE_API_KEY`, `RESEND_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_SERVICE_ACCOUNT_JSON`, `SCHEDULER_SECRET`)
 - [ ] Initialiser Firebase Admin SDK med service account JSON
 - [ ] Initialiser Resend-klient
 - [ ] Konfigurer Ktor med JSON-serialisering og CORS (tillat frontend-domenet)

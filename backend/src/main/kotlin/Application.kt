@@ -1,4 +1,4 @@
-package com.example
+package com.scienta
 
 import io.ktor.server.application.*
 
@@ -7,6 +7,8 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    val config = loadConfig()
+
     configureSerialization()
     configureRouting()
 }

@@ -1,4 +1,4 @@
-package com.example
+package com.scienta
 
 import io.ktor.http.*
 import io.ktor.server.application.*
