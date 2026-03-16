@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
-import { NewClientModal } from '../components/NewClientModal'
 
 type Consultant = {
   name: string
   photoUrl?: string
-  clientId?: string
+  projectId?: string
   contractStart?: string
   contractEnd?: string
   warningDate?: string
@@ -16,6 +15,7 @@ type Consultant = {
 }
 
 type Client = { id: string; name: string }
+type Project = { id: string; name: string; clientId: string }
 type Admin = { id: string; name: string; email: string }
 
 export function ConsultantDetailPage() {
@@ -23,12 +23,12 @@ export function ConsultantDetailPage() {
 
   const [consultant, setConsultant] = useState<Consultant | null>(null)
   const [clients, setClients] = useState<Client[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [admins, setAdmins] = useState<Admin[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [showNewClientModal, setShowNewClientModal] = useState(false)
 
-  const [clientId, setClientId] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDate, setWarningDate] = useState('')
@@ -41,7 +41,7 @@ export function ConsultantDetailPage() {
       if (!snap.exists()) return
       const data = snap.data() as Consultant
       setConsultant(data)
-      setClientId(data.clientId ?? '')
+      setProjectId(data.projectId ?? '')
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
       setWarningDate(data.warningDate ?? '')
@@ -49,19 +49,22 @@ export function ConsultantDetailPage() {
       setNotifyList(data.notifyList ?? [])
     })
     const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
-      setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Client)))
+      setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Client)).sort((a, b) => a.name.localeCompare(b.name)))
+    })
+    const unsubProjects = onSnapshot(collection(db, 'projects'), (snap) => {
+      setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Project)))
     })
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => {
       setAdmins(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Admin)))
     })
-    return () => { unsubClients(); unsubAdmins() }
+    return () => { unsubClients(); unsubProjects(); unsubAdmins() }
   }, [id])
 
   async function handleSave() {
     if (!id) return
     setSaving(true)
     await updateDoc(doc(db, 'consultants', id), {
-      clientId: clientId || null,
+      projectId: projectId || null,
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
       warningDate: warningDate || null,
@@ -74,9 +77,7 @@ export function ConsultantDetailPage() {
   }
 
   function toggleNotifyAdmin(uid: string) {
-    setNotifyList((prev) =>
-      prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]
-    )
+    setNotifyList((prev) => prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid])
   }
 
   if (!consultant) return null
@@ -85,113 +86,97 @@ export function ConsultantDetailPage() {
   const labelClass = "text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider"
 
   return (
-    <>
-      {showNewClientModal && (
-        <NewClientModal
-          onClose={() => setShowNewClientModal(false)}
-          onCreated={(newId, newName) => {
-            setClients((prev) => [...prev, { id: newId, name: newName }])
-            setClientId(newId)
-            setShowNewClientModal(false)
-          }}
-        />
-      )}
-
-      <div className="max-w-xl">
-        <div className="flex items-center gap-4 mb-8">
-          {consultant.photoUrl ? (
-            <img src={consultant.photoUrl} alt={consultant.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white dark:ring-gray-800 shadow-sm" />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg font-semibold">
-              {consultant.name?.charAt(0)}
-            </div>
-          )}
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{consultant.name}</h1>
-            <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
+    <div className="max-w-xl">
+      <div className="flex items-center gap-4 mb-8">
+        {consultant.photoUrl ? (
+          <img src={consultant.photoUrl} alt={consultant.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white dark:ring-gray-800 shadow-sm" />
+        ) : (
+          <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg font-semibold">
+            {consultant.name?.charAt(0)}
           </div>
-        </div>
-
-        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors duration-200">
-          <div className="flex flex-col gap-1.5">
-            <label className={labelClass}>Kunde</label>
-            <select
-              value={clientId}
-              onChange={(e) => {
-                if (e.target.value === '__new__') setShowNewClientModal(true)
-                else setClientId(e.target.value)
-              }}
-              className={inputClass}
-            >
-              <option value="">– Ingen –</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              <option value="__new__">+ Legg til ny kunde…</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className={labelClass}>Kontraktstart</label>
-              <input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className={inputClass} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className={labelClass}>Kontraktslutt</label>
-              <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} className={inputClass} />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className={labelClass}>Varslingsdato</label>
-            <input type="date" value={warningDate} onChange={(e) => setWarningDate(e.target.value)} className={inputClass} />
-          </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          <div className="flex flex-col gap-2.5">
-            <label className={labelClass}>Varsle</label>
-            <div className="flex gap-2">
-              {[true, false].map((val) => (
-                <button
-                  key={String(val)}
-                  type="button"
-                  onClick={() => setNotifyAll(val)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
-                    notifyAll === val
-                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
-                      : 'bg-white dark:bg-transparent text-gray-500 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
-                  }`}
-                >
-                  {val ? 'Varsle alle' : 'Velg spesifikke'}
-                </button>
-              ))}
-            </div>
-            {!notifyAll && (
-              <div className="flex flex-col gap-2 mt-1 pl-1">
-                {admins.map((a) => (
-                  <label key={a.id} className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                    <input type="checkbox" checked={notifyList.includes(a.id)} onChange={() => toggleNotifyAdmin(a.id)} className="rounded accent-gray-900 dark:accent-white" />
-                    <span>{a.name}</span>
-                    <span className="text-gray-400 dark:text-gray-600 text-xs">{a.email}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="h-px bg-gray-100 dark:bg-gray-800" />
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40 text-white dark:text-gray-900 text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
-            >
-              {saving ? 'Lagrer…' : 'Lagre endringer'}
-            </button>
-            {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Lagret!</span>}
-          </div>
+        )}
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{consultant.name}</h1>
+          <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
         </div>
       </div>
-    </>
+
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors">
+
+        {/* Prosjekt (gruppert per kunde) */}
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Prosjekt</label>
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inputClass}>
+            <option value="">– Ikke i oppdrag –</option>
+            {clients.map((client) => {
+              const clientProjects = projects.filter((p) => p.clientId === client.id)
+              if (clientProjects.length === 0) return null
+              return (
+                <optgroup key={client.id} label={client.name}>
+                  {clientProjects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </optgroup>
+              )
+            })}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Kontraktstart</label>
+            <input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className={inputClass} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Kontraktslutt</label>
+            <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Varslingsdato</label>
+          <input type="date" value={warningDate} onChange={(e) => setWarningDate(e.target.value)} className={inputClass} />
+        </div>
+
+        <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+        <div className="flex flex-col gap-2.5">
+          <label className={labelClass}>Varsle</label>
+          <div className="flex gap-2">
+            {[true, false].map((val) => (
+              <button key={String(val)} type="button" onClick={() => setNotifyAll(val)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                  notifyAll === val
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                    : 'bg-white dark:bg-transparent text-gray-500 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+                }`}>
+                {val ? 'Varsle alle' : 'Velg spesifikke'}
+              </button>
+            ))}
+          </div>
+          {!notifyAll && (
+            <div className="flex flex-col gap-2 mt-1 pl-1">
+              {admins.map((a) => (
+                <label key={a.id} className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input type="checkbox" checked={notifyList.includes(a.id)} onChange={() => toggleNotifyAdmin(a.id)} className="rounded accent-gray-900 dark:accent-white" />
+                  <span>{a.name}</span>
+                  <span className="text-gray-400 dark:text-gray-600 text-xs">{a.email}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+        <div className="flex items-center gap-3">
+          <button onClick={handleSave} disabled={saving}
+            className="bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40 text-white dark:text-gray-900 text-sm font-medium px-5 py-2.5 rounded-xl transition-colors">
+            {saving ? 'Lagrer…' : 'Lagre endringer'}
+          </button>
+          {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Lagret!</span>}
+        </div>
+      </div>
+    </div>
   )
 }

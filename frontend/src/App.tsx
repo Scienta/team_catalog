@@ -5,6 +5,8 @@ import { LoginPage } from './pages/LoginPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
 import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
 import { AdminsPage } from './pages/AdminsPage'
+import { ClientsPage } from './pages/ClientsPage'
+import { ClientDetailPage } from './pages/ClientDetailPage'
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/clients" element={<ProtectedRoute><Layout><ClientsPage /></Layout></ProtectedRoute>} />
+        <Route path="/clients/:id" element={<ProtectedRoute><Layout><ClientDetailPage /></Layout></ProtectedRoute>} />
         <Route
           path="/admins"
           element={
