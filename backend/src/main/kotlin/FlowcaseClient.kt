@@ -47,7 +47,7 @@ data class FlowcaseWorkExp(
     val year_to: String? = null,
     val month_to: Int? = null,
     val order: Int? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -55,7 +55,7 @@ data class FlowcaseProjRole(
     @SerialName("_id") val id: String = "",
     val name: FlowcaseLangText? = null,
     val long_description: FlowcaseLangText? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -70,7 +70,7 @@ data class FlowcaseProjExp(
     val month_to: Int? = null,
     val roles: List<FlowcaseProjRole> = emptyList(),
     val order: Int? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -81,7 +81,7 @@ data class FlowcaseEdu(
     val year_from: String? = null,
     val year_to: String? = null,
     val order: Int? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -96,7 +96,7 @@ data class FlowcaseTechGroup(
     val category: FlowcaseLangText? = null,
     val technology_skills: List<FlowcaseTechSkill> = emptyList(),
     val order: Int? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -105,7 +105,7 @@ data class FlowcaseKeyQual(
     val label: FlowcaseLangText? = null,
     val long_description: FlowcaseLangText? = null,
     val order: Int? = null,
-    val disabled: Boolean = false
+    val disabled: Boolean? = false
 )
 
 @Serializable
@@ -126,7 +126,7 @@ suspend fun fetchConsultantCV(apiKey: String, userId: String, defaultCvId: Strin
             val users: List<FlowcaseUser> = try {
                 client.get("https://scienta.flowcase.com/api/v2/users/search") {
                     bearerAuth(apiKey)
-                    parameter("limit", 200)
+                    parameter("limit", 1000)
                 }.body()
             } catch (e: Exception) { return null }
             users.find { it.id == userId }?.default_cv_id ?: return null
@@ -154,7 +154,7 @@ suspend fun fetchFlowcaseUsers(apiKey: String): List<FlowcaseUser> {
     buildFlowcaseClient().use { client ->
         return client.get("https://scienta.flowcase.com/api/v2/users/search") {
             bearerAuth(apiKey)
-            parameter("limit", 100)
+            parameter("limit", 1000)
         }.body()
     }
 }

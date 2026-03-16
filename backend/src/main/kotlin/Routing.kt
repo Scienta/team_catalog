@@ -74,21 +74,21 @@ fun Application.configureRouting(config: AppConfig) {
             for (user in activeUsers) {
                 val cv = try { fetchConsultantCV(config.flowcaseApiKey, user.id, user.default_cv_id) } catch (_: Exception) { null }
                 val techTags: List<String> = cv?.technologies
-                    ?.filter { !it.disabled }
+                    ?.filter { it.disabled != true }
                     ?.flatMap { group -> group.technology_skills.mapNotNull { skill -> skill.tags?.text() } }
                     ?: emptyList()
                 val projectCustomers: List<String> = cv?.project_experiences
-                    ?.filter { !it.disabled }
+                    ?.filter { it.disabled != true }
                     ?.mapNotNull { it.customer?.text() }
                     ?.distinct()
                     ?: emptyList()
                 val employers: List<String> = cv?.work_experiences
-                    ?.filter { !it.disabled }
+                    ?.filter { it.disabled != true }
                     ?.mapNotNull { it.employer?.text() }
                     ?.distinct()
                     ?: emptyList()
                 val schools: List<String> = cv?.educations
-                    ?.filter { !it.disabled }
+                    ?.filter { it.disabled != true }
                     ?.mapNotNull { it.school?.text() }
                     ?.distinct()
                     ?: emptyList()
@@ -195,13 +195,13 @@ fun Application.configureRouting(config: AppConfig) {
             }
 
             // Cache CV fields in Firestore so list page can filter without fetching CVs
-            val techTags: List<String> = cv.technologies.filter { !it.disabled }
+            val techTags: List<String> = cv.technologies.filter { it.disabled != true }
                 .flatMap { group -> group.technology_skills.mapNotNull { skill -> skill.tags?.text() } }
-            val projectCustomers: List<String> = cv.project_experiences.filter { !it.disabled }
+            val projectCustomers: List<String> = cv.project_experiences.filter { it.disabled != true }
                 .mapNotNull { it.customer?.text() }.distinct()
-            val employers: List<String> = cv.work_experiences.filter { !it.disabled }
+            val employers: List<String> = cv.work_experiences.filter { it.disabled != true }
                 .mapNotNull { it.employer?.text() }.distinct()
-            val schools: List<String> = cv.educations.filter { !it.disabled }
+            val schools: List<String> = cv.educations.filter { it.disabled != true }
                 .mapNotNull { it.school?.text() }.distinct()
             getFirestore().collection("consultants").document(consultantId)
                 .update(mapOf(
@@ -213,24 +213,24 @@ fun Application.configureRouting(config: AppConfig) {
 
             call.respond(ConsultantCVResponse(
                 workExperience = cv.work_experiences
-                    .filter { !it.disabled }
+                    .filter { it.disabled != true }
                     .sortedWith(compareByDescending<FlowcaseWorkExp> { it.year_from?.toIntOrNull() }.thenByDescending { it.month_from })
                     .map { CVWorkEntry(it.id, it.employer?.text(), (it.long_description ?: it.description)?.text(), it.year_from?.toIntOrNull(), it.month_from, it.year_to?.toIntOrNull(), it.month_to) },
                 projectExperience = cv.project_experiences
-                    .filter { !it.disabled }
+                    .filter { it.disabled != true }
                     .sortedWith(compareByDescending<FlowcaseProjExp> { it.year_from?.toIntOrNull() }.thenByDescending { it.month_from })
-                    .map { CVProjectEntry(it.id, it.customer?.text(), it.roles.filter { r -> !r.disabled }.mapNotNull { r -> r.name?.text() }, (it.long_description ?: it.description)?.text(), it.year_from?.toIntOrNull(), it.month_from, it.year_to?.toIntOrNull(), it.month_to) },
+                    .map { CVProjectEntry(it.id, it.customer?.text(), it.roles.filter { r -> r.disabled != true }.mapNotNull { r -> r.name?.text() }, (it.long_description ?: it.description)?.text(), it.year_from?.toIntOrNull(), it.month_from, it.year_to?.toIntOrNull(), it.month_to) },
                 education = cv.educations
-                    .filter { !it.disabled }
+                    .filter { it.disabled != true }
                     .sortedByDescending { it.year_from?.toIntOrNull() }
                     .map { CVEducationEntry(it.id, it.school?.text(), it.degree?.text(), it.year_from?.toIntOrNull(), it.year_to?.toIntOrNull()) },
                 technologies = cv.technologies
-                    .filter { !it.disabled }
+                    .filter { it.disabled != true }
                     .sortedBy { it.order }
                     .map { CVTechGroup(it.category?.text(), it.technology_skills.mapNotNull { t -> t.tags?.text() }) }
                     .filter { it.tags.isNotEmpty() },
                 keyQualifications = cv.key_qualifications
-                    .filter { !it.disabled }
+                    .filter { it.disabled != true }
                     .sortedBy { it.order }
                     .map { CVKeyQual(it.label?.text(), it.long_description?.text()) }
                     .filter { it.description != null || it.label != null }
