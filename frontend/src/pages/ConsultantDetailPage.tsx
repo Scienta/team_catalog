@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
+import { NewClientModal } from '../components/NewClientModal'
 
 type Consultant = {
   name: string
@@ -26,6 +27,7 @@ export function ConsultantDetailPage() {
   const [admins, setAdmins] = useState<Admin[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showNewClientModal, setShowNewClientModal] = useState(false)
 
   // Editable fields
   const [clientId, setClientId] = useState('')
@@ -83,6 +85,17 @@ export function ConsultantDetailPage() {
   if (!consultant) return null
 
   return (
+    <>
+    {showNewClientModal && (
+      <NewClientModal
+        onClose={() => setShowNewClientModal(false)}
+        onCreated={(newId, newName) => {
+          setClients((prev) => [...prev, { id: newId, name: newName }])
+          setClientId(newId)
+          setShowNewClientModal(false)
+        }}
+      />
+    )}
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-xl mx-auto">
         <button
@@ -115,8 +128,11 @@ export function ConsultantDetailPage() {
             <select
               value={clientId}
               onChange={(e) => {
-                if (e.target.value === '__new__') return // handled in 3.6
-                setClientId(e.target.value)
+                if (e.target.value === '__new__') {
+                  setShowNewClientModal(true)
+                } else {
+                  setClientId(e.target.value)
+                }
               }}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
@@ -219,5 +235,6 @@ export function ConsultantDetailPage() {
         </div>
       </div>
     </div>
+    </>
   )
 }

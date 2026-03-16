@@ -139,21 +139,21 @@ npm install -D tailwindcss @tailwindcss/vite
   - Viser suksess/feil-melding
 
 ### 3.5 Konsulentdetalj / edit (`/consultant/:id`)
-- [ ] Hent konsulentdokument fra Firestore
-- [ ] Vis (read-only): foto og navn (fra Flowcase)
-- [ ] Redigerbare felt:
+- [x] Hent konsulentdokument fra Firestore
+- [x] Vis (read-only): foto og navn (fra Flowcase)
+- [x] Redigerbare felt:
   - **Kunde**: dropdown fra `clients` collection + "Legg til ny kunde"-valg
   - **Kontraktstart**: date picker
   - **Kontraktslutt**: date picker
   - **Varslingsdato**: date picker
   - **Varsle**: toggle mellom "Varsle alle" og velg spesifikke admins (multi-select fra `admins` collection)
-- [ ] "Lagre"-knapp: skriv til Firestore `consultants/{id}` med kun admin-feltene
-- [ ] "Tilbake"-lenke til listen
+- [x] "Lagre"-knapp: skriv til Firestore `consultants/{id}` med kun admin-feltene
+- [x] "Tilbake"-lenke til listen
 
 ### 3.6 Legg til ny kunde (modal)
-- [ ] Åpnes når admin velger "Legg til ny kunde" i dropdown
-- [ ] Felt: navn (påkrevd), kontaktperson (valgfritt), notater (valgfritt)
-- [ ] Lagrer til `clients` collection, velger automatisk den nye kunden i dropdownen
+- [x] Åpnes når admin velger "Legg til ny kunde" i dropdown
+- [x] Felt: navn (påkrevd), kontaktperson (valgfritt), notater (valgfritt)
+- [x] Lagrer til `clients` collection, velger automatisk den nye kunden i dropdownen
 
 ### 3.7 Admin-administrasjon
 - [ ] Egen side `/admins` tilgjengelig fra navigasjon
