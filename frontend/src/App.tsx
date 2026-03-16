@@ -1,9 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
-
-function LoginPage() {
-  return <div>Login</div>
-}
+import { LoginPage } from './pages/LoginPage'
 
 function ConsultantListPage() {
   return <div>Consultant List</div>

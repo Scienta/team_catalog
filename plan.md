@@ -119,10 +119,10 @@ npm install -D tailwindcss @tailwindcss/vite
 - [x] Sett opp React Router med routes: `/login`, `/`, `/consultant/:id`
 
 ### 3.3 Login-side (`/login`)
-- [ ] E-post og passord-felt
-- [ ] Kall `signInWithEmailAndPassword`
-- [ ] Vis feilmelding ved feil innlogging
-- [ ] Redirect til `/` ved suksess
+- [x] E-post og passord-felt
+- [x] Kall `signInWithEmailAndPassword`
+- [x] Vis feilmelding ved feil innlogging
+- [x] Redirect til `/` ved suksess
 
 ### 3.4 Konsulentliste (`/`)
 - [ ] Real-time Firestore listener på `consultants` collection
