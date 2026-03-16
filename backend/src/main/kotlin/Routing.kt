@@ -76,6 +76,7 @@ fun Application.configureRouting(config: AppConfig) {
             call.authenticateFirebase() ?: return@post
 
             val body = call.receive<LookupUserRequest>()
+            val firestore = getFirestore()
             val user: UserRecord? = try {
                 FirebaseAuth.getInstance().getUserByEmail(body.email)
             } catch (e: Exception) {
@@ -83,7 +84,15 @@ fun Application.configureRouting(config: AppConfig) {
             }
 
             if (user == null) {
-                call.respond(HttpStatusCode.NotFound, "User not found")
+                // User hasn't signed in yet — store as pending admin
+                val name = body.email.substringBefore('@')
+                    .split('.', '-', '_')
+                    .joinToString(" ") { it.replaceFirstChar { c -> c.uppercase() } }
+                firestore.collection("pendingAdmins")
+                    .document(body.email)
+                    .set(mapOf("email" to body.email, "name" to name))
+                    .get()
+                call.respond(LookupUserResponse(uid = "", name = name, email = body.email))
                 return@post
             }
 
@@ -92,6 +101,30 @@ fun Application.configureRouting(config: AppConfig) {
                 name = user.displayName ?: "",
                 email = user.email ?: body.email
             ))
+        }
+
+        post("/auth/promote") {
+            // Any authenticated user can call this — promotes them if they're in pendingAdmins
+            val firebaseUid = call.verifyFirebaseToken() ?: return@post
+            val firebaseToken = FirebaseAuth.getInstance().getUser(firebaseUid)
+            val email = firebaseToken.email ?: run {
+                call.respond(HttpStatusCode.BadRequest, "No email on account")
+                return@post
+            }
+
+            val firestore = getFirestore()
+            val pending = firestore.collection("pendingAdmins").document(email).get().get()
+            if (!pending.exists()) {
+                call.respond(mapOf("promoted" to false))
+                return@post
+            }
+
+            val name = pending.getString("name") ?: email.substringBefore('@')
+            firestore.collection("admins").document(firebaseUid)
+                .set(mapOf("name" to name, "email" to email))
+                .get()
+            firestore.collection("pendingAdmins").document(email).delete().get()
+            call.respond(mapOf("promoted" to true))
         }
 
         post("/check-contracts") {

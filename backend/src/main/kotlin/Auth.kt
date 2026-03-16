@@ -5,6 +5,22 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 
+// Verifies token and returns uid — does NOT check admin status
+suspend fun ApplicationCall.verifyFirebaseToken(): String? {
+    val authHeader = request.headers["Authorization"]
+    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        respond(HttpStatusCode.Unauthorized, "Missing or invalid Authorization header")
+        return null
+    }
+    val token = authHeader.removePrefix("Bearer ").trim()
+    return try {
+        getFirebaseAuth().verifyIdToken(token).uid
+    } catch (e: FirebaseAuthException) {
+        respond(HttpStatusCode.Unauthorized, "Invalid token")
+        null
+    }
+}
+
 suspend fun ApplicationCall.authenticateFirebase(): String? {
     val authHeader = request.headers["Authorization"]
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {
