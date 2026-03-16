@@ -162,7 +162,10 @@ export function ConsultantListPage() {
           {c.isInternal
             ? <p className="text-xs text-gray-300 dark:text-gray-700 mt-0.5">Intern</p>
             : alert
-            ? <p className="text-xs text-red-400 dark:text-red-500 mt-0.5">Uten prosjekt</p>
+            ? <>
+                {clientName !== '–' && <p className="text-xs text-red-400 dark:text-red-500 mt-0.5 truncate">{clientName}</p>}
+                <p className="text-xs text-red-400 dark:text-red-500 mt-0.5">Uten prosjekt</p>
+              </>
             : (
               <>
                 {clientName !== '–' && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{clientName}</p>}
@@ -312,7 +315,7 @@ export function ConsultantListPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3.5 text-red-400 dark:text-red-500">–</td>
-                  <td className="px-5 py-3.5 text-red-400 dark:text-red-500">–</td>
+                  <td className="px-5 py-3.5 text-red-400 dark:text-red-500">{getClientNames(c.id)}</td>
                   <td className="px-5 py-3.5 text-red-400 dark:text-red-500">{c.contractEnd ?? '–'}</td>
                   <td className="px-5 py-3.5">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400">
