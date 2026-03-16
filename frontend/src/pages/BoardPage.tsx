@@ -217,7 +217,6 @@ export function BoardPage() {
           )}
           {sortedClients.map((client) => {
             const cons = getClientConsultants(client.id)
-            if (cons.length === 0) return null
             const color = COLORS[colorMap[client.id] % COLORS.length]
             return (
               <GroupCard
@@ -259,7 +258,6 @@ export function BoardPage() {
           {sortedClients.map((client) => {
             const clientProjects = getSortedProjectsForClient(client.id)
             const totalCons = getClientConsultants(client.id).length
-            if (clientProjects.length === 0) return null
             const color = COLORS[colorMap[client.id] % COLORS.length]
 
             return (
