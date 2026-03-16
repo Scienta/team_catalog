@@ -13,6 +13,9 @@ data class HealthResponse(val status: String)
 @Serializable
 data class SyncResponse(val synced: Int)
 
+@Serializable
+data class CheckContractsResponse(val notified: Int)
+
 fun Application.configureRouting(config: AppConfig) {
     install(StatusPages) {
         exception<Throwable> { call, cause ->
@@ -44,6 +47,17 @@ fun Application.configureRouting(config: AppConfig) {
             }
 
             call.respond(SyncResponse(users.size))
+        }
+
+        post("/check-contracts") {
+            val secret = call.request.headers["X-Scheduler-Secret"]
+            if (secret == null || secret != config.schedulerSecret) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid scheduler secret")
+                return@post
+            }
+
+            val notified = checkAndNotifyContracts()
+            call.respond(CheckContractsResponse(notified))
         }
     }
 }

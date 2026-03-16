@@ -84,14 +84,14 @@ Scienta_team_catalog/
 - [x] Returner `{ "synced": N }`
 
 ### 2.6 `POST /check-contracts`
-- [ ] Valider `X-Scheduler-Secret` header mot `SCHEDULER_SECRET` env var → `401` hvis feil
-- [ ] Hent alle dokumenter fra Firestore `consultants` hvor `warningDate == today` (midnatt UTC)
-- [ ] For hvert treff:
+- [x] Valider `X-Scheduler-Secret` header mot `SCHEDULER_SECRET` env var → `401` hvis feil
+- [x] Hent alle dokumenter fra Firestore `consultants` hvor `warningDate == today` (midnatt UTC)
+- [x] For hvert treff:
   - Hent `clientId` → slå opp klientnavn fra `clients/{clientId}`
   - Hvis `notifyAll == true`: hent alle e-poster fra `admins` collection
   - Hvis `notifyAll == false`: hent e-poster for UIDs i `notifyList`
   - Send e-post via Resend
-- [ ] Returner `{ "notified": N }`
+- [x] Returner `{ "notified": N }`
 
 ### 2.7 Lokal testing
 - [ ] Test `/health` lokalt med `curl`
