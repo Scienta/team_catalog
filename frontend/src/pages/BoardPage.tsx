@@ -206,52 +206,14 @@ export function BoardPage() {
         </div>
       </div>
 
-      {/* Board */}
-      <div className="overflow-x-auto pb-6 -mx-6 px-6" onMouseUp={() => { setDragging(null); setDragOverCol(null) }}>
-        {view === 'client' ? (
-          <div className="flex flex-col gap-8">
-            {/* Unassigned */}
-            {unassigned.length > 0 && (
-              <div className="flex gap-4 items-start">
-                <Column
-                  title="Uten prosjekt"
-                  consultants={unassigned}
-                  isOver={dragOverCol === 'unassigned'}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverCol('unassigned') }}
-                  onDragLeave={() => setDragOverCol(null)}
-                  onDrop={() => handleDrop(null)}
-                  onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: null })}
-                  onConsultantClick={(id) => navigate(`/consultant/${id}`)}
-                />
-              </div>
-            )}
-
-            {/* Per client */}
-            {clientsWithProjects.map(({ client, projects: cProjects, colorIdx }) => (
-              <div key={client.id}>
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-3">{client.name}</p>
-                <div className="flex gap-4 items-start">
-                  {cProjects.map((project) => (
-                    <Column
-                      key={project.id}
-                      title={project.name}
-                      color={CLIENT_COLORS[colorIdx % CLIENT_COLORS.length]}
-                      consultants={getProjectConsultants(project)}
-                      isOver={dragOverCol === project.id}
-                      onDragOver={(e) => { e.preventDefault(); setDragOverCol(project.id) }}
-                      onDragLeave={() => setDragOverCol(null)}
-                      onDrop={() => handleDrop(project.id)}
-                      onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: project.id })}
-                      onConsultantClick={(id) => navigate(`/consultant/${id}`)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex gap-4 items-start">
-            {/* Unassigned */}
+      {/* Board — horizontal scroll */}
+      <div
+        className="overflow-x-auto overflow-y-auto pb-6 -mx-6 px-6 flex-1"
+        onMouseUp={() => { setDragging(null); setDragOverCol(null) }}
+      >
+        <div className="flex gap-4 items-start" style={{ minWidth: 'max-content' }}>
+          {/* Unassigned column always first */}
+          {unassigned.length > 0 && (
             <Column
               title="Uten prosjekt"
               consultants={unassigned}
@@ -262,28 +224,47 @@ export function BoardPage() {
               onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: null })}
               onConsultantClick={(id) => navigate(`/consultant/${id}`)}
             />
-            {/* All projects */}
-            {projects.map((project) => {
-              const colorIdx = clientColorMap[project.clientId] ?? 0
-              const client = clients.find((c) => c.id === project.clientId)
-              return (
-                <Column
-                  key={project.id}
-                  title={project.name}
-                  subtitle={client?.name}
-                  color={CLIENT_COLORS[colorIdx % CLIENT_COLORS.length]}
-                  consultants={getProjectConsultants(project)}
-                  isOver={dragOverCol === project.id}
-                  onDragOver={(e) => { e.preventDefault(); setDragOverCol(project.id) }}
-                  onDragLeave={() => setDragOverCol(null)}
-                  onDrop={() => handleDrop(project.id)}
-                  onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: project.id })}
-                  onConsultantClick={(id) => navigate(`/consultant/${id}`)}
-                />
-              )
-            })}
-          </div>
-        )}
+          )}
+
+          {view === 'client'
+            ? clientsWithProjects.map(({ client, projects: cProjects, colorIdx }) => (
+                cProjects.map((project) => (
+                  <Column
+                    key={project.id}
+                    title={project.name}
+                    subtitle={client.name}
+                    color={CLIENT_COLORS[colorIdx % CLIENT_COLORS.length]}
+                    consultants={getProjectConsultants(project)}
+                    isOver={dragOverCol === project.id}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverCol(project.id) }}
+                    onDragLeave={() => setDragOverCol(null)}
+                    onDrop={() => handleDrop(project.id)}
+                    onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: project.id })}
+                    onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+                  />
+                ))
+              ))
+            : projects.map((project) => {
+                const colorIdx = clientColorMap[project.clientId] ?? 0
+                const client = clients.find((c) => c.id === project.clientId)
+                return (
+                  <Column
+                    key={project.id}
+                    title={project.name}
+                    subtitle={client?.name}
+                    color={CLIENT_COLORS[colorIdx % CLIENT_COLORS.length]}
+                    consultants={getProjectConsultants(project)}
+                    isOver={dragOverCol === project.id}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverCol(project.id) }}
+                    onDragLeave={() => setDragOverCol(null)}
+                    onDrop={() => handleDrop(project.id)}
+                    onConsultantDragStart={(id) => setDragging({ consultantId: id, fromProjectId: project.id })}
+                    onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+                  />
+                )
+              })
+          }
+        </div>
       </div>
     </div>
   )
