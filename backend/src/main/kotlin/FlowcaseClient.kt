@@ -20,7 +20,8 @@ data class FlowcaseImage(
 data class FlowcaseUser(
     val id: String,
     val name: String,
-    val image: FlowcaseImage? = null
+    val image: FlowcaseImage? = null,
+    val deactivated: Boolean = false
 )
 
 fun buildFlowcaseClient(): HttpClient = HttpClient(CIO) {

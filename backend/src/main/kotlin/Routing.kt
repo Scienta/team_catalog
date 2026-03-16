@@ -30,11 +30,15 @@ fun Application.configureRouting(config: AppConfig) {
         post("/sync") {
             call.authenticateFirebase() ?: return@post
 
-            val users = fetchFlowcaseUsers(config.flowcaseApiKey)
-            val photoUrls = extractPhotoUrls(users)
+            val allUsers = fetchFlowcaseUsers(config.flowcaseApiKey)
+            val activeUsers = allUsers.filter { !it.deactivated }
+            val activeIds = activeUsers.map { it.id }.toSet()
+            val photoUrls = extractPhotoUrls(activeUsers)
 
             val firestore = getFirestore()
-            for (user in users) {
+
+            // Upsert active consultants
+            for (user in activeUsers) {
                 val data = mapOf(
                     "flowcaseId" to user.id,
                     "name" to user.name,
@@ -46,7 +50,15 @@ fun Application.configureRouting(config: AppConfig) {
                     .get()
             }
 
-            call.respond(SyncResponse(users.size))
+            // Delete consultants no longer active in Flowcase
+            val existing = firestore.collection("consultants").get().get()
+            for (doc in existing.documents) {
+                if (doc.id !in activeIds) {
+                    doc.reference.delete().get()
+                }
+            }
+
+            call.respond(SyncResponse(activeUsers.size))
         }
 
         post("/check-contracts") {

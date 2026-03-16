@@ -2,10 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { LoginPage } from './pages/LoginPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
-
-function ConsultantDetailPage() {
-  return <div>Consultant Detail</div>
-}
+import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
 
 export default function App() {
   return (
