@@ -109,9 +109,9 @@ cd frontend
 npm install firebase react-router-dom
 npm install -D tailwindcss @tailwindcss/vite
 ```
-- [ ] Konfigurer Tailwind i `vite.config.ts`
-- [ ] Lag `.env` med Firebase-konfig og `VITE_API_BASE_URL`
-- [ ] Opprett `src/firebase.ts` — initialiser Firebase app, auth, og Firestore
+- [x] Konfigurer Tailwind i `vite.config.ts`
+- [x] Lag `.env` med Firebase-konfig og `VITE_API_BASE_URL`
+- [x] Opprett `src/firebase.ts` — initialiser Firebase app, auth, og Firestore
 
 ### 3.2 Auth-lag
 - [ ] `src/hooks/useAuth.ts` — lytter på `onAuthStateChanged`, sjekker `admins/{uid}` i Firestore
