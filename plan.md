@@ -72,7 +72,7 @@ Scienta_team_catalog/
   - Returnerer `401` hvis ugyldig
 
 ### 2.4 `GET /health`
-- [ ] Returner `200 OK` med `{ "status": "ok" }`
+- [x] Returner `200 OK` med `{ "status": "ok" }`
 
 ### 2.5 `POST /sync`
 - [ ] Beskytt med `authenticateFirebase()`
