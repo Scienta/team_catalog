@@ -200,9 +200,11 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
   const [contactEmail, setContactEmail] = useState(project.contactEmail ?? '')
   const [saving, setSaving] = useState(false)
   const [showConsultants, setShowConsultants] = useState(false)
+  const [search, setSearch] = useState('')
 
   const assigned = allConsultants.filter((c) => project.consultantIds?.includes(c.id))
   const unassigned = allConsultants.filter((c) => !project.consultantIds?.includes(c.id))
+  const filteredUnassigned = unassigned.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
 
   async function handleSave() {
     setSaving(true)
@@ -291,13 +293,30 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
             {unassigned.length > 0 && (
               <>
                 <button
-                  onClick={() => setShowConsultants((v) => !v)}
+                  onClick={() => { setShowConsultants((v) => !v); setSearch('') }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors border-t border-dashed border-gray-200 dark:border-gray-700"
                 >
                   <span>{showConsultants ? 'Skjul' : `+ Legg til konsulenter (${unassigned.length} tilgjengelige)`}</span>
                   <span className="text-gray-300 dark:text-gray-700">{showConsultants ? '▲' : '▼'}</span>
                 </button>
-                {showConsultants && unassigned.map((c) => (
+                {showConsultants && (
+                  <div className="border-t border-gray-100 dark:border-gray-800 px-3 py-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Søk etter konsulent…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white placeholder-gray-300 dark:placeholder-gray-600 transition-all"
+                    />
+                  </div>
+                )}
+                {showConsultants && filteredUnassigned.length === 0 && (
+                  <div className="px-3 py-3 text-xs text-gray-400 dark:text-gray-600 text-center border-t border-gray-100 dark:border-gray-800">
+                    {search ? 'Ingen treff' : 'Alle er lagt til'}
+                  </div>
+                )}
+                {showConsultants && filteredUnassigned.map((c) => (
                   <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
                     <div className="flex items-center gap-2.5">
                       {c.photoUrl ? (
@@ -308,7 +327,7 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
                       <span className="text-sm text-gray-500 dark:text-gray-500">{c.name}</span>
                     </div>
                     <button
-                      onClick={() => handleAddConsultant(c.id)}
+                      onClick={() => { handleAddConsultant(c.id); setSearch('') }}
                       className="text-xs font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-2.5 py-1 rounded-lg transition-colors"
                     >
                       + Legg til
