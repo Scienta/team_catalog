@@ -6,6 +6,7 @@ import { db } from '../firebase'
 type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
+type Admin = { id: string }
 
 // Drag state: fromProjectId = project they came from (or null), fromClientId = direct client assignment (or null)
 type DragState = { consultantId: string; fromProjectId: string | null; fromClientId: string | null }
@@ -124,6 +125,7 @@ export function BoardPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [admins, setAdmins] = useState<Admin[]>([])
   const [view, setView] = useState<'client' | 'project'>('client')
   const [dragging, setDragging] = useState<DragState | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -133,7 +135,8 @@ export function BoardPage() {
     const u1 = onSnapshot(collection(db, 'consultants'), (s) => setConsultants(s.docs.map((d) => ({ id: d.id, ...d.data() } as Consultant))))
     const u2 = onSnapshot(collection(db, 'projects'), (s) => setProjects(s.docs.map((d) => ({ id: d.id, ...d.data() } as Project))))
     const u3 = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map((d) => ({ id: d.id, ...d.data() } as Client))))
-    return () => { u1(); u2(); u3() }
+    const u4 = onSnapshot(collection(db, 'admins'), (s) => setAdmins(s.docs.map((d) => ({ id: d.id } as Admin))))
+    return () => { u1(); u2(); u3(); u4() }
   }, [])
 
   const colorMap: Record<string, number> = {}
@@ -142,8 +145,11 @@ export function BoardPage() {
   // All consultant IDs assigned to any project
   const projectAssignedIds = new Set(projects.flatMap((p) => p.consultantIds ?? []))
 
-  // Globally unassigned: no project AND no clientId
-  const globalUnassigned = consultants.filter((c) => !projectAssignedIds.has(c.id) && !c.clientId)
+  // Admin IDs — excluded from "Uten kunde" when they have no client assignment
+  const adminIds = new Set(admins.map((a) => a.id))
+
+  // Globally unassigned: no project AND no clientId, and not an admin
+  const globalUnassigned = consultants.filter((c) => !projectAssignedIds.has(c.id) && !c.clientId && !adminIds.has(c.id))
 
   function getProjectConsultants(project: Project) {
     return (project.consultantIds ?? []).map((id) => consultants.find((c) => c.id === id)).filter(Boolean) as Consultant[]
