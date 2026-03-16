@@ -30,6 +30,8 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.ktor.server.config.yaml)
 
+    implementation(libs.ktor.server.cors)
+
     // Ktor client (for Flowcase API calls)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
