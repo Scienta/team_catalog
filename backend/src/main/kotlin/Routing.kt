@@ -51,7 +51,9 @@ fun Application.configureRouting(config: AppConfig) {
                 val data = mapOf(
                     "flowcaseId" to user.id,
                     "name" to user.name,
-                    "photoUrl" to (photoUrls[user.id] ?: "")
+                    "photoUrl" to (photoUrls[user.id] ?: ""),
+                    "email" to (user.email ?: ""),
+                    "telephone" to (user.telephone ?: "")
                 )
                 firestore.collection("consultants")
                     .document(user.id)

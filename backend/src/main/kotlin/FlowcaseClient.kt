@@ -20,6 +20,8 @@ data class FlowcaseImage(
 data class FlowcaseUser(
     val id: String,
     val name: String,
+    val email: String? = null,
+    val telephone: String? = null,
     val image: FlowcaseImage? = null,
     val deactivated: Boolean = false
 )

@@ -6,6 +6,8 @@ import { db } from '../firebase'
 type Consultant = {
   name: string
   photoUrl?: string
+  email?: string
+  telephone?: string
   isInternal?: boolean
   contractStart?: string
   contractEnd?: string
@@ -85,7 +87,21 @@ export function ConsultantDetailPage() {
         )}
         <div>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{consultant.name}</h1>
-          <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
+          <div className="flex flex-col gap-0.5 mt-1">
+            {consultant.email && (
+              <a href={`mailto:${consultant.email}`} className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                {consultant.email}
+              </a>
+            )}
+            {consultant.telephone && (
+              <a href={`tel:${consultant.telephone}`} className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                {consultant.telephone}
+              </a>
+            )}
+            {!consultant.email && !consultant.telephone && (
+              <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
+            )}
+          </div>
         </div>
       </div>
 
