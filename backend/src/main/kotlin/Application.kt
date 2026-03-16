@@ -23,5 +23,5 @@ fun Application.module() {
     }
 
     configureSerialization()
-    configureRouting()
+    configureRouting(config)
 }

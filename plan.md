@@ -75,13 +75,13 @@ Scienta_team_catalog/
 - [x] Returner `200 OK` med `{ "status": "ok" }`
 
 ### 2.5 `POST /sync`
-- [ ] Beskytt med `authenticateFirebase()`
-- [ ] Kall Flowcase `GET /api/v2/users/search` med Bearer token
-- [ ] Parse respons: hent `id`, `name` per bruker
-- [ ] Kall foto-endepunktet per bruker (respekter rate limit: maks 5 req/s)
-- [ ] Upsert til Firestore `consultants/{flowcaseId}` med `merge: true`
+- [x] Beskytt med `authenticateFirebase()`
+- [x] Kall Flowcase `GET /api/v2/users/search` med Bearer token
+- [x] Parse respons: hent `id`, `name` per bruker
+- [x] Kall foto-endepunktet per bruker (respekter rate limit: maks 5 req/s)
+- [x] Upsert til Firestore `consultants/{flowcaseId}` med `merge: true`
   - Sett kun: `flowcaseId`, `name`, `photoUrl`
-- [ ] Returner `{ "synced": N }`
+- [x] Returner `{ "synced": N }`
 
 ### 2.6 `POST /check-contracts`
 - [ ] Valider `X-Scheduler-Secret` header mot `SCHEDULER_SECRET` env var → `401` hvis feil

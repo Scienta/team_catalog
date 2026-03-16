@@ -13,8 +13,15 @@ class HealthTest {
     @Test
     fun `GET health returnerer 200 med status ok`() = testApplication {
         application {
+            val testConfig = AppConfig(
+                flowcaseApiKey = "test",
+                resendApiKey = "test",
+                firebaseProjectId = "test",
+                firebaseServiceAccountJson = "{}",
+                schedulerSecret = "test"
+            )
             configureSerialization()
-            configureRouting()
+            configureRouting(testConfig)
         }
         client.get("/health").apply {
             assertEquals(HttpStatusCode.OK, status)
