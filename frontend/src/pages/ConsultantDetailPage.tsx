@@ -6,6 +6,7 @@ import { db } from '../firebase'
 type Consultant = {
   name: string
   photoUrl?: string
+  isInternal?: boolean
   contractStart?: string
   contractEnd?: string
   warningDays?: number
@@ -23,6 +24,7 @@ export function ConsultantDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [isInternal, setIsInternal] = useState(false)
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDays, setWarningDays] = useState<number | ''>('')
@@ -35,6 +37,7 @@ export function ConsultantDetailPage() {
       if (!snap.exists()) return
       const data = snap.data() as Consultant
       setConsultant(data)
+      setIsInternal(data.isInternal ?? false)
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
       setWarningDays(data.warningDays ?? '')
@@ -49,6 +52,7 @@ export function ConsultantDetailPage() {
     if (!id) return
     setSaving(true)
     await updateDoc(doc(db, 'consultants', id), {
+      isInternal,
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
       warningDays: warningDays !== '' ? warningDays : null,
@@ -85,6 +89,22 @@ export function ConsultantDetailPage() {
         </div>
       </div>
 
+      {/* Internal toggle */}
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-5 py-4 flex items-center justify-between transition-colors">
+        <div>
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Intern ansatt</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Telles ikke med i konsulentstatistikk eller uten-oppdrag-varsler</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsInternal(!isInternal)}
+          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isInternal ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+        >
+          <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white dark:bg-gray-900 shadow transition-transform ${isInternal ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+      </div>
+
+      {!isInternal && (
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors">
 
         <div className="grid grid-cols-2 gap-4">
@@ -178,6 +198,17 @@ export function ConsultantDetailPage() {
           {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Lagret!</span>}
         </div>
       </div>
+      )}
+
+      {isInternal && (
+        <div className="flex items-center gap-3">
+          <button onClick={handleSave} disabled={saving}
+            className="bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40 text-white dark:text-gray-900 text-sm font-medium px-5 py-2.5 rounded-xl transition-colors">
+            {saving ? 'Lagrer…' : 'Lagre endringer'}
+          </button>
+          {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Lagret!</span>}
+        </div>
+      )}
     </div>
   )
 }

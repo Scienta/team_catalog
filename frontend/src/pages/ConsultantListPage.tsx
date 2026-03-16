@@ -4,7 +4,7 @@ import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -129,8 +129,10 @@ export function ConsultantListPage() {
   }
 
   const filtered = getFilteredConsultants()
-  const noProject = filtered.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
-  const withProject = filtered.filter((c) => getConsultantProjects(c.id).length > 0)
+  const interne = filtered.filter((c) => c.isInternal).sort((a, b) => a.name.localeCompare(b.name))
+  const active = filtered.filter((c) => !c.isInternal)
+  const noProject = active.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
+  const withProject = active.filter((c) => getConsultantProjects(c.id).length > 0)
   const withContract = withProject.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
   const withoutContract = withProject.filter((c) => !c.contractEnd).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -216,7 +218,8 @@ export function ConsultantListPage() {
           <div>
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Konsulenter</h1>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">
-              {hasFilter ? `${filtered.length} av ${consultants.length}` : `${consultants.length} totalt`}
+              {hasFilter ? `${active.length} av ${consultants.filter((c) => !c.isInternal).length}` : `${consultants.filter((c) => !c.isInternal).length} konsulenter`}
+              {interne.length > 0 && <span className="ml-2 text-gray-300 dark:text-gray-700">· {interne.length} interne</span>}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -299,7 +302,35 @@ export function ConsultantListPage() {
                 </tr>
               ))}
 
-              {filtered.length === 0 && (
+              {/* Internal employees — own section, no red warnings */}
+              {interne.length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={5} className="px-5 pt-5 pb-1">
+                      <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Interne ansatte</span>
+                    </td>
+                  </tr>
+                  {interne.map((c) => (
+                    <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)}
+                      className="cursor-pointer transition-all hover:bg-gray-50/80 dark:hover:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          {c.photoUrl ? <img src={c.photoUrl} alt={c.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0 opacity-60" /> : <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-400 dark:text-gray-600 font-medium text-xs flex-shrink-0">{c.name?.charAt(0)}</div>}
+                          <span className="font-medium text-gray-500 dark:text-gray-500">{c.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
+                      <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
+                      <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
+                      <td className="px-5 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600">Intern</span>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              )}
+
+              {active.length === 0 && interne.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-400 dark:text-gray-600">
                     Ingen konsulenter matcher filteret

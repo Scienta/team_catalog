@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -35,9 +35,12 @@ export function DashboardPage() {
     return projects.filter((p) => p.consultantIds?.includes(consultantId))
   }
 
+  // Exclude internal employees from all stats
+  const externalConsultants = consultants.filter((c) => !c.isInternal)
+
   // Derived stats
-  const withProject = consultants.filter((c) => getConsultantProjects(c.id).length > 0)
-  const withoutProject = consultants.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
+  const withProject = externalConsultants.filter((c) => getConsultantProjects(c.id).length > 0)
+  const withoutProject = externalConsultants.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
 
   const withContract = withProject.filter((c) => c.contractEnd)
   const expiringSoon = withContract.filter((c) => { const d = daysUntil(c.contractEnd!); return d >= 0 && d <= 30 }).sort((a, b) => daysUntil(a.contractEnd!) - daysUntil(b.contractEnd!))
@@ -66,7 +69,7 @@ export function DashboardPage() {
   const statCards = [
     {
       label: 'Konsulenter totalt',
-      value: consultants.length,
+      value: externalConsultants.length,
       sub: `${withProject.length} på prosjekt`,
       color: 'bg-white dark:bg-[#1a1a1a]',
       valueColor: 'text-gray-900 dark:text-white',
@@ -129,7 +132,7 @@ export function DashboardPage() {
       {/* Pie chart */}
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-6">Statusfordeling</h2>
-        {consultants.length === 0 ? (
+        {externalConsultants.length === 0 ? (
           <div className="h-48 flex items-center justify-center text-sm text-gray-400 dark:text-gray-600">Ingen data</div>
         ) : (
           <div className="flex flex-col md:flex-row items-center gap-8">
@@ -167,7 +170,7 @@ export function DashboardPage() {
             {/* Legend */}
             <div className="flex flex-col gap-3 flex-1">
               {pieData.map((entry) => {
-                const pct = Math.round((entry.value / consultants.length) * 100)
+                const pct = Math.round((entry.value / externalConsultants.length) * 100)
                 return (
                   <div key={entry.name} className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
@@ -188,7 +191,7 @@ export function DashboardPage() {
               })}
               <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
                 <span className="text-xs text-gray-400 dark:text-gray-600">Totalt</span>
-                <span className="text-sm font-bold text-gray-900 dark:text-white">{consultants.length} konsulenter</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{externalConsultants.length} konsulenter</span>
               </div>
             </div>
           </div>
