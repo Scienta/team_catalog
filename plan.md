@@ -65,7 +65,7 @@ Scienta_team_catalog/
 - [x] Konfigurer Ktor med JSON-serialisering og CORS (tillat frontend-domenet)
 
 ### 2.3 Auth-middleware
-- [ ] Lag `authenticateFirebase()` funksjon som:
+- [x] Lag `authenticateFirebase()` funksjon som:
   - Leser `Authorization: Bearer <token>` header
   - Verifiserer token med `FirebaseAuth.getInstance().verifyIdToken(token)`
   - Sjekker at UID finnes i Firestore `admins` collection
