@@ -236,7 +236,7 @@ export function BoardPage() {
 
       {view === 'client' ? (
         // ── CLIENT VIEW: one droppable card per client ──
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
           {globalUnassigned.length > 0 && (
             <GroupCard
               title="Uten kunde"
@@ -280,7 +280,7 @@ export function BoardPage() {
         // ── PROJECT VIEW: grouped by client, one card per project + one "uten prosjekt" card per client ──
         <div className="flex flex-col gap-8">
           {globalUnassigned.length > 0 && (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+            <div className="grid gap-3 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
               <GroupCard
                 title="Uten kunde"
                 consultants={globalUnassigned}
@@ -309,7 +309,7 @@ export function BoardPage() {
                   <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
                   <span className="text-xs text-gray-400 dark:text-gray-600">{totalCons} konsulenter</span>
                 </div>
-                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                <div className="grid gap-3 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                   {/* Project cards */}
                   {clientProjects.map((project) => (
                     <GroupCard
