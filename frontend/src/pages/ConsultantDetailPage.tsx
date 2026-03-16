@@ -77,29 +77,32 @@ export function ConsultantDetailPage() {
 
   return (
     <div className="max-w-xl">
-      <div className="flex items-center gap-4 mb-8">
+      <div className="flex items-center gap-5 mb-8">
         {consultant.photoUrl ? (
-          <img src={consultant.photoUrl} alt={consultant.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white dark:ring-gray-800 shadow-sm" />
+          <img src={consultant.photoUrl} alt={consultant.name} className="w-24 h-24 rounded-2xl object-cover ring-2 ring-white dark:ring-gray-800 shadow-md flex-shrink-0" />
         ) : (
-          <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg font-semibold">
+          <div className="w-24 h-24 rounded-2xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-2xl font-semibold flex-shrink-0">
             {consultant.name?.charAt(0)}
           </div>
         )}
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{consultant.name}</h1>
-          <div className="flex flex-col gap-0.5 mt-1">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{consultant.name}</h1>
+          <div className="flex flex-col gap-1.5 mt-0.5">
             {consultant.email && (
-              <a href={`mailto:${consultant.email}`} className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                {consultant.email}
+              <a href={`mailto:${consultant.email}`} className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                <span>{consultant.email}</span>
               </a>
             )}
             {consultant.telephone && (
-              <a href={`tel:${consultant.telephone}`} className="text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                {consultant.telephone}
+              <a href={`tel:${consultant.telephone}`} className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.62 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 5.5 5.5l.97-.97a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+                <span>{consultant.telephone}</span>
               </a>
-            )}
-            {!consultant.email && !consultant.telephone && (
-              <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
             )}
           </div>
         </div>
