@@ -4,8 +4,8 @@ import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; projectIds?: string[]; contractEnd?: string }
-type Project = { id: string; name: string; clientId: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string }
+type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
 function daysUntil(dateStr: string): number {
@@ -14,7 +14,7 @@ function daysUntil(dateStr: string): number {
   return Math.round((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function statusStyle(days: number) {
+function contractStatusStyle(days: number) {
   if (days <= 7) return { row: 'border-l-2 border-red-400 bg-red-50/60 dark:bg-red-950/30', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400', label: days < 0 ? 'Utløpt' : `${days}d` }
   if (days <= 30) return { row: 'border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-950/30', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400', label: `${days}d` }
   return { row: 'border-l-2 border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400', label: `${days}d` }
@@ -22,7 +22,7 @@ function statusStyle(days: number) {
 
 export function ConsultantListPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([])
-  const [projects, setProjects] = useState<Record<string, Project>>({})
+  const [projects, setProjects] = useState<Project[]>([])
   const [clients, setClients] = useState<Record<string, string>>({})
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
@@ -30,11 +30,7 @@ export function ConsultantListPage() {
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'consultants'), (s) => setConsultants(s.docs.map((d) => ({ id: d.id, ...d.data() } as Consultant))))
-    const u2 = onSnapshot(collection(db, 'projects'), (s) => {
-      const map: Record<string, Project> = {}
-      s.docs.forEach((d) => { map[d.id] = { id: d.id, ...d.data() } as Project })
-      setProjects(map)
-    })
+    const u2 = onSnapshot(collection(db, 'projects'), (s) => setProjects(s.docs.map((d) => ({ id: d.id, ...d.data() } as Project))))
     const u3 = onSnapshot(collection(db, 'clients'), (s) => {
       const map: Record<string, string> = {}
       s.docs.forEach((d) => { map[d.id] = (d.data() as Client).name })
@@ -55,19 +51,28 @@ export function ConsultantListPage() {
     finally { setSyncing(false) }
   }
 
-  function getProjectNames(c: Consultant): string {
-    if (!c.projectIds?.length) return '–'
-    return c.projectIds.map((pid) => projects[pid]?.name).filter(Boolean).join(', ') || '–'
+  // Build reverse map: consultantId → projects they belong to
+  function getConsultantProjects(consultantId: string): Project[] {
+    return projects.filter((p) => p.consultantIds?.includes(consultantId))
   }
 
-  function getClientNames(c: Consultant): string {
-    if (!c.projectIds?.length) return '–'
-    const clientIds = [...new Set(c.projectIds.map((pid) => projects[pid]?.clientId).filter(Boolean))]
-    return clientIds.map((cid) => clients[cid!]).filter(Boolean).join(', ') || '–'
+  function getProjectNames(consultantId: string): string {
+    const ps = getConsultantProjects(consultantId)
+    return ps.length ? ps.map((p) => p.name).join(', ') : '–'
   }
 
-  const withContract = consultants.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
-  const withoutContract = consultants.filter((c) => !c.contractEnd).sort((a, b) => a.name.localeCompare(b.name))
+  function getClientNames(consultantId: string): string {
+    const ps = getConsultantProjects(consultantId)
+    if (!ps.length) return '–'
+    const clientIds = [...new Set(ps.map((p) => p.clientId).filter(Boolean))]
+    return clientIds.map((cid) => clients[cid]).filter(Boolean).join(', ') || '–'
+  }
+
+  // Split: no project (crisis), with contract, without contract
+  const noProject = consultants.filter((c) => getConsultantProjects(c.id).length === 0).sort((a, b) => a.name.localeCompare(b.name))
+  const withProject = consultants.filter((c) => getConsultantProjects(c.id).length > 0)
+  const withContract = withProject.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
+  const withoutContract = withProject.filter((c) => !c.contractEnd).sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div>
@@ -96,9 +101,37 @@ export function ConsultantListPage() {
             </tr>
           </thead>
           <tbody>
+            {/* No project — crisis red */}
+            {noProject.map((c, i) => (
+              <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)}
+                className={`cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 border-l-4 border-red-500 bg-red-50 dark:bg-red-950/40 ${i === 0 ? '' : 'border-t border-red-100 dark:border-red-900/30'}`}>
+                <td className="px-5 py-3.5">
+                  <div className="flex items-center gap-3">
+                    {c.photoUrl ? <img src={c.photoUrl} alt={c.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" /> : <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-red-600 dark:text-red-400 font-medium text-xs flex-shrink-0">{c.name?.charAt(0)}</div>}
+                    <span className="font-medium text-gray-900 dark:text-white">{c.name}</span>
+                  </div>
+                </td>
+                <td className="px-5 py-3.5 text-red-400 dark:text-red-500">–</td>
+                <td className="px-5 py-3.5 text-red-400 dark:text-red-500">–</td>
+                <td className="px-5 py-3.5 text-red-400 dark:text-red-500">{c.contractEnd ?? '–'}</td>
+                <td className="px-5 py-3.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 dark:bg-red-400 animate-pulse" />
+                    Uten prosjekt
+                  </span>
+                </td>
+              </tr>
+            ))}
+
+            {/* Separator if both sections exist */}
+            {noProject.length > 0 && (withContract.length > 0 || withoutContract.length > 0) && (
+              <tr><td colSpan={5} className="h-px bg-gray-100 dark:bg-gray-800 p-0" /></tr>
+            )}
+
+            {/* With contract — sorted by expiry */}
             {withContract.map((c) => {
               const days = daysUntil(c.contractEnd!)
-              const { row, badge, label } = statusStyle(days)
+              const { row, badge, label } = contractStatusStyle(days)
               return (
                 <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)} className={`cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 ${row}`}>
                   <td className="px-5 py-3.5">
@@ -107,13 +140,15 @@ export function ConsultantListPage() {
                       <span className="font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getProjectNames(c)}</td>
-                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getClientNames(c)}</td>
+                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getProjectNames(c.id)}</td>
+                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getClientNames(c.id)}</td>
                   <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{c.contractEnd}</td>
                   <td className="px-5 py-3.5"><span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${badge}`}>{label}</span></td>
                 </tr>
               )
             })}
+
+            {/* Without contract */}
             {withoutContract.map((c, i) => (
               <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)} className={`cursor-pointer transition-all hover:bg-gray-50/80 dark:hover:bg-gray-800/40 ${i === 0 && withContract.length > 0 ? 'border-t-2 border-gray-100 dark:border-gray-800' : ''}`}>
                 <td className="px-5 py-3.5">
@@ -122,8 +157,8 @@ export function ConsultantListPage() {
                     <span className="font-medium text-gray-600 dark:text-gray-400">{c.name}</span>
                   </div>
                 </td>
-                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getProjectNames(c)}</td>
-                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getClientNames(c)}</td>
+                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getProjectNames(c.id)}</td>
+                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getClientNames(c.id)}</td>
                 <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">–</td>
                 <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700 text-xs">Ingen kontrakt</td>
               </tr>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
 import { db } from '../firebase'
 
 type Client = {
@@ -20,13 +20,13 @@ type Project = {
   contactName?: string
   contactPhone?: string
   contactEmail?: string
+  consultantIds?: string[]
 }
 
 type Consultant = {
   id: string
   name: string
   photoUrl?: string
-  projectIds?: string[]
 }
 
 const inputClass = "border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent transition-all w-full"
@@ -39,7 +39,6 @@ export function ClientDetailPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [saved, setSaved] = useState(false)
 
-  // Client fields
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [slackChannel, setSlackChannel] = useState('')
@@ -47,7 +46,6 @@ export function ClientDetailPage() {
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
 
-  // New project form
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [addingProject, setAddingProject] = useState(false)
@@ -73,7 +71,7 @@ export function ClientDetailPage() {
     )
 
     const unsubConsultants = onSnapshot(collection(db, 'consultants'), (snap) => {
-      setConsultants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Consultant)))
+      setConsultants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Consultant)).sort((a, b) => a.name.localeCompare(b.name)))
     })
 
     return () => { unsubClient(); unsubProjects(); unsubConsultants() }
@@ -90,7 +88,7 @@ export function ClientDetailPage() {
     e.preventDefault()
     if (!id) return
     setAddingProject(true)
-    await addDoc(collection(db, 'projects'), { name: newProjectName, clientId: id })
+    await addDoc(collection(db, 'projects'), { name: newProjectName, clientId: id, consultantIds: [] })
     setNewProjectName('')
     setShowProjectForm(false)
     setAddingProject(false)
@@ -104,13 +102,11 @@ export function ClientDetailPage() {
 
   return (
     <div className="max-w-2xl">
-      {/* Client header */}
       <div className="mb-8">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{client.name}</h1>
         <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">Kundedetaljer</p>
       </div>
 
-      {/* Client info form */}
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 mb-6 transition-colors">
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Kundenavn</label>
@@ -132,7 +128,7 @@ export function ClientDetailPage() {
 
         <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-        <p className={`${labelClass}`}>Kontaktperson</p>
+        <p className={labelClass}>Kontaktperson</p>
         <div className="grid grid-cols-1 gap-4 -mt-3">
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>Navn</label>
@@ -160,7 +156,6 @@ export function ClientDetailPage() {
         </div>
       </div>
 
-      {/* Projects */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Prosjekter</h2>
         <button onClick={() => setShowProjectForm(true)} className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-lg transition-colors">
@@ -182,24 +177,21 @@ export function ClientDetailPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {projects.map((p) => {
-            const assigned = consultants.filter((c) => c.projectIds?.includes(p.id))
-            return (
-              <ProjectCard
-                key={p.id}
-                project={p}
-                consultants={assigned}
-                onDelete={() => handleDeleteProject(p.id)}
-              />
-            )
-          })}
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              allConsultants={consultants}
+              onDelete={() => handleDeleteProject(p.id)}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function ProjectCard({ project, consultants, onDelete }: { project: Project; consultants: Consultant[]; onDelete: () => void }) {
+function ProjectCard({ project, allConsultants, onDelete }: { project: Project; allConsultants: Consultant[]; onDelete: () => void }) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(project.name)
   const [description, setDescription] = useState(project.description ?? '')
@@ -207,12 +199,35 @@ function ProjectCard({ project, consultants, onDelete }: { project: Project; con
   const [contactPhone, setContactPhone] = useState(project.contactPhone ?? '')
   const [contactEmail, setContactEmail] = useState(project.contactEmail ?? '')
   const [saving, setSaving] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  const assigned = allConsultants.filter((c) => project.consultantIds?.includes(c.id))
+  const unassigned = allConsultants.filter((c) => !project.consultantIds?.includes(c.id))
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   async function handleSave() {
     setSaving(true)
     await updateDoc(doc(db, 'projects', project.id), { name, description: description || null, contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null })
     setSaving(false)
     setEditing(false)
+  }
+
+  async function handleAddConsultant(consultantId: string) {
+    await updateDoc(doc(db, 'projects', project.id), { consultantIds: arrayUnion(consultantId) })
+  }
+
+  async function handleRemoveConsultant(consultantId: string) {
+    await updateDoc(doc(db, 'projects', project.id), { consultantIds: arrayRemove(consultantId) })
   }
 
   return (
@@ -259,21 +274,58 @@ function ProjectCard({ project, consultants, onDelete }: { project: Project; con
               {project.contactEmail && <a href={`mailto:${project.contactEmail}`} className="hover:underline">{project.contactEmail}</a>}
             </div>
           )}
-          <div className="flex flex-wrap gap-2 mt-1">
-            {consultants.length === 0 ? (
-              <span className="text-xs text-gray-400 dark:text-gray-600">Ingen konsulenter tilknyttet</span>
-            ) : (
-              consultants.map((c) => (
-                <div key={c.id} className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full px-2.5 py-1">
-                  {c.photoUrl ? (
-                    <img src={c.photoUrl} alt={c.name} className="w-4 h-4 rounded-full object-cover" />
+
+          {/* Consultants */}
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            {assigned.map((c) => (
+              <div key={c.id} className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-full pl-1.5 pr-2 py-1 group">
+                {c.photoUrl ? (
+                  <img src={c.photoUrl} alt={c.name} className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-400 text-[9px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                )}
+                <span className="text-xs text-gray-700 dark:text-gray-300">{c.name}</span>
+                <button
+                  onClick={() => handleRemoveConsultant(c.id)}
+                  className="ml-0.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 leading-none"
+                  title="Fjern fra prosjekt"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+
+            {/* Add consultant picker */}
+            <div className="relative" ref={pickerRef}>
+              <button
+                onClick={() => setShowPicker((v) => !v)}
+                className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 border border-dashed border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 rounded-full px-2.5 py-1 transition-colors"
+              >
+                + Legg til
+              </button>
+              {showPicker && (
+                <div className="absolute left-0 top-full mt-1 z-20 bg-white dark:bg-[#222] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-48 max-h-60 overflow-y-auto">
+                  {unassigned.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-600">Alle konsulenter er lagt til</p>
                   ) : (
-                    <div className="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-400 text-[9px] font-semibold">{c.name?.charAt(0)}</div>
+                    unassigned.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => { handleAddConsultant(c.id); setShowPicker(false) }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                      >
+                        {c.photoUrl ? (
+                          <img src={c.photoUrl} alt={c.name} className="w-5 h-5 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-[10px] font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                        )}
+                        {c.name}
+                      </button>
+                    ))
                   )}
-                  <span className="text-xs text-gray-700 dark:text-gray-300">{c.name}</span>
                 </div>
-              ))
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
