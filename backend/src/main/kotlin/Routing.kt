@@ -38,7 +38,7 @@ data class CVEducationEntry(val id: String, val school: String?, val degree: Str
 data class CVTechGroup(val label: String?, val tags: List<String>)
 
 @Serializable
-data class CVKeyQual(val label: String?, val tags: List<String>)
+data class CVKeyQual(val label: String?, val description: String?)
 
 @Serializable
 data class ConsultantCVResponse(
@@ -70,14 +70,40 @@ fun Application.configureRouting(config: AppConfig) {
 
             val firestore = getFirestore()
 
-            // Upsert active consultants
+            // Upsert active consultants (fetch CV to extract filterable fields)
             for (user in activeUsers) {
+                val cv = try { fetchConsultantCV(config.flowcaseApiKey, user.id, user.default_cv_id) } catch (_: Exception) { null }
+                val techTags: List<String> = cv?.technologies
+                    ?.filter { !it.disabled }
+                    ?.flatMap { group -> group.technology_skills.mapNotNull { skill -> skill.tags?.text() } }
+                    ?: emptyList()
+                val projectCustomers: List<String> = cv?.project_experiences
+                    ?.filter { !it.disabled }
+                    ?.mapNotNull { it.customer?.text() }
+                    ?.distinct()
+                    ?: emptyList()
+                val employers: List<String> = cv?.work_experiences
+                    ?.filter { !it.disabled }
+                    ?.mapNotNull { it.employer?.text() }
+                    ?.distinct()
+                    ?: emptyList()
+                val schools: List<String> = cv?.educations
+                    ?.filter { !it.disabled }
+                    ?.mapNotNull { it.school?.text() }
+                    ?.distinct()
+                    ?: emptyList()
+
                 val data = mapOf(
                     "flowcaseId" to user.id,
                     "name" to user.name,
                     "photoUrl" to (photoUrls[user.id] ?: ""),
                     "email" to (user.email ?: ""),
-                    "telephone" to (user.telephone ?: "")
+                    "telephone" to (user.telephone ?: ""),
+                    "defaultCvId" to (user.default_cv_id ?: ""),
+                    "technologies" to techTags,
+                    "projectCustomers" to projectCustomers,
+                    "employers" to employers,
+                    "schools" to schools
                 )
                 firestore.collection("consultants")
                     .document(user.id)
@@ -159,28 +185,55 @@ fun Application.configureRouting(config: AppConfig) {
                 return@get
             }
 
-            val cv = fetchConsultantCV(config.flowcaseApiKey, consultantId)
+            val consultantDoc = getFirestore().collection("consultants").document(consultantId).get().get()
+            val defaultCvId = consultantDoc.getString("defaultCvId")
+
+            val cv = fetchConsultantCV(config.flowcaseApiKey, consultantId, defaultCvId)
             if (cv == null) {
                 call.respond(ConsultantCVResponse(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()))
                 return@get
             }
 
+            // Cache CV fields in Firestore so list page can filter without fetching CVs
+            val techTags: List<String> = cv.technologies.filter { !it.disabled }
+                .flatMap { group -> group.technology_skills.mapNotNull { skill -> skill.tags?.text() } }
+            val projectCustomers: List<String> = cv.project_experiences.filter { !it.disabled }
+                .mapNotNull { it.customer?.text() }.distinct()
+            val employers: List<String> = cv.work_experiences.filter { !it.disabled }
+                .mapNotNull { it.employer?.text() }.distinct()
+            val schools: List<String> = cv.educations.filter { !it.disabled }
+                .mapNotNull { it.school?.text() }.distinct()
+            getFirestore().collection("consultants").document(consultantId)
+                .update(mapOf(
+                    "technologies" to techTags,
+                    "projectCustomers" to projectCustomers,
+                    "employers" to employers,
+                    "schools" to schools
+                )).get()
+
             call.respond(ConsultantCVResponse(
-                workExperience = cv.work_experience
-                    .sortedWith(compareByDescending<FlowcaseWorkExp> { it.year_from }.thenByDescending { it.month_from })
-                    .map { CVWorkEntry(it.id, it.employer?.text(), it.description?.text(), it.year_from, it.month_from, it.year_to, it.month_to) },
+                workExperience = cv.work_experiences
+                    .filter { !it.disabled }
+                    .sortedWith(compareByDescending<FlowcaseWorkExp> { it.year_from?.toIntOrNull() }.thenByDescending { it.month_from })
+                    .map { CVWorkEntry(it.id, it.employer?.text(), (it.long_description ?: it.description)?.text(), it.year_from?.toIntOrNull(), it.month_from, it.year_to?.toIntOrNull(), it.month_to) },
                 projectExperience = cv.project_experiences
-                    .sortedWith(compareByDescending<FlowcaseProjExp> { it.year_from }.thenByDescending { it.month_from })
-                    .map { CVProjectEntry(it.id, it.customer?.text(), it.roles.mapNotNull { r -> r.name?.text() }, (it.long_description ?: it.description)?.text(), it.year_from, it.month_from, it.year_to, it.month_to) },
-                education = cv.education
-                    .sortedByDescending { it.year_from }
-                    .map { CVEducationEntry(it.id, it.school?.text(), it.degree?.text(), it.year_from, it.year_to) },
+                    .filter { !it.disabled }
+                    .sortedWith(compareByDescending<FlowcaseProjExp> { it.year_from?.toIntOrNull() }.thenByDescending { it.month_from })
+                    .map { CVProjectEntry(it.id, it.customer?.text(), it.roles.filter { r -> !r.disabled }.mapNotNull { r -> r.name?.text() }, (it.long_description ?: it.description)?.text(), it.year_from?.toIntOrNull(), it.month_from, it.year_to?.toIntOrNull(), it.month_to) },
+                education = cv.educations
+                    .filter { !it.disabled }
+                    .sortedByDescending { it.year_from?.toIntOrNull() }
+                    .map { CVEducationEntry(it.id, it.school?.text(), it.degree?.text(), it.year_from?.toIntOrNull(), it.year_to?.toIntOrNull()) },
                 technologies = cv.technologies
-                    .map { CVTechGroup(it.label?.text(), it.tags.mapNotNull { t -> t.name?.text() }) }
+                    .filter { !it.disabled }
+                    .sortedBy { it.order }
+                    .map { CVTechGroup(it.category?.text(), it.technology_skills.mapNotNull { t -> t.tags?.text() }) }
                     .filter { it.tags.isNotEmpty() },
                 keyQualifications = cv.key_qualifications
-                    .map { CVKeyQual(it.label?.text(), it.tags.mapNotNull { t -> t.name?.text() }) }
-                    .filter { it.tags.isNotEmpty() }
+                    .filter { !it.disabled }
+                    .sortedBy { it.order }
+                    .map { CVKeyQual(it.label?.text(), it.long_description?.text()) }
+                    .filter { it.description != null || it.label != null }
             ))
         }
 

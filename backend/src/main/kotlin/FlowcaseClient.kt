@@ -6,6 +6,7 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -23,103 +24,118 @@ data class FlowcaseUser(
     val email: String? = null,
     val telephone: String? = null,
     val image: FlowcaseImage? = null,
-    val deactivated: Boolean = false
+    val deactivated: Boolean = false,
+    val default_cv_id: String? = null
 )
 
-// ── CV data classes ──────────────────────────────────────────────────────────
+// ── CV data classes (Flowcase API v3) ────────────────────────────────────────
 
+// Multi-language text: Flowcase uses "no" for Norwegian, "int" for English
 @Serializable
-data class FlowcaseLangText(val no: String? = null, val en: String? = null) {
-    fun text(): String? = no?.takeIf { it.isNotBlank() } ?: en?.takeIf { it.isNotBlank() }
+data class FlowcaseLangText(val no: String? = null, val int: String? = null) {
+    fun text(): String? = no?.takeIf { it.isNotBlank() } ?: int?.takeIf { it.isNotBlank() }
 }
 
 @Serializable
-data class FlowcaseCVRef(val id: String)
-
-@Serializable
 data class FlowcaseWorkExp(
-    val id: String = "",
+    @SerialName("_id") val id: String = "",
     val employer: FlowcaseLangText? = null,
+    val long_description: FlowcaseLangText? = null,
     val description: FlowcaseLangText? = null,
-    val year_from: Int? = null,
+    val year_from: String? = null,
     val month_from: Int? = null,
-    val year_to: Int? = null,
+    val year_to: String? = null,
     val month_to: Int? = null,
-    val order: Int? = null
+    val order: Int? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
 data class FlowcaseProjRole(
-    val id: String = "",
-    val name: FlowcaseLangText? = null
+    @SerialName("_id") val id: String = "",
+    val name: FlowcaseLangText? = null,
+    val long_description: FlowcaseLangText? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
 data class FlowcaseProjExp(
-    val id: String = "",
+    @SerialName("_id") val id: String = "",
     val customer: FlowcaseLangText? = null,
-    val description: FlowcaseLangText? = null,
     val long_description: FlowcaseLangText? = null,
-    val year_from: Int? = null,
+    val description: FlowcaseLangText? = null,
+    val year_from: String? = null,
     val month_from: Int? = null,
-    val year_to: Int? = null,
+    val year_to: String? = null,
     val month_to: Int? = null,
     val roles: List<FlowcaseProjRole> = emptyList(),
-    val order: Int? = null
+    val order: Int? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
 data class FlowcaseEdu(
-    val id: String = "",
+    @SerialName("_id") val id: String = "",
     val school: FlowcaseLangText? = null,
     val degree: FlowcaseLangText? = null,
-    val description: FlowcaseLangText? = null,
-    val year_from: Int? = null,
-    val year_to: Int? = null
+    val year_from: String? = null,
+    val year_to: String? = null,
+    val order: Int? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
-data class FlowcaseTechTag(val id: String = "", val name: FlowcaseLangText? = null)
+data class FlowcaseTechSkill(
+    val tags: FlowcaseLangText? = null,
+    val order: Int? = null
+)
 
 @Serializable
 data class FlowcaseTechGroup(
-    val id: String = "",
-    val label: FlowcaseLangText? = null,
-    val tags: List<FlowcaseTechTag> = emptyList()
+    @SerialName("_id") val id: String = "",
+    val category: FlowcaseLangText? = null,
+    val technology_skills: List<FlowcaseTechSkill> = emptyList(),
+    val order: Int? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
-data class FlowcaseKQTag(val id: String = "", val name: FlowcaseLangText? = null)
-
-@Serializable
 data class FlowcaseKeyQual(
-    val id: String = "",
+    @SerialName("_id") val id: String = "",
     val label: FlowcaseLangText? = null,
-    val tags: List<FlowcaseKQTag> = emptyList()
+    val long_description: FlowcaseLangText? = null,
+    val order: Int? = null,
+    val disabled: Boolean = false
 )
 
 @Serializable
 data class FlowcaseCVFull(
-    val id: String = "",
-    val work_experience: List<FlowcaseWorkExp> = emptyList(),
+    val work_experiences: List<FlowcaseWorkExp> = emptyList(),
     val project_experiences: List<FlowcaseProjExp> = emptyList(),
-    val education: List<FlowcaseEdu> = emptyList(),
+    val educations: List<FlowcaseEdu> = emptyList(),
     val key_qualifications: List<FlowcaseKeyQual> = emptyList(),
     val technologies: List<FlowcaseTechGroup> = emptyList()
 )
 
-suspend fun fetchConsultantCV(apiKey: String, userId: String): FlowcaseCVFull? {
-    buildFlowcaseClient().use { client ->
-        val cvRefs: List<FlowcaseCVRef> = try {
-            client.get("https://scienta.flowcase.com/api/v1/users/$userId/cvs") {
-                bearerAuth(apiKey)
-            }.body()
-        } catch (e: Exception) {
-            return null
+suspend fun fetchConsultantCV(apiKey: String, userId: String, defaultCvId: String?): FlowcaseCVFull? {
+    // Resolve CV id: prefer the stored defaultCvId, otherwise fetch from users/search
+    val cvId: String = if (!defaultCvId.isNullOrBlank()) {
+        defaultCvId
+    } else {
+        buildFlowcaseClient().use { client ->
+            val users: List<FlowcaseUser> = try {
+                client.get("https://scienta.flowcase.com/api/v2/users/search") {
+                    bearerAuth(apiKey)
+                    parameter("limit", 200)
+                }.body()
+            } catch (e: Exception) { return null }
+            users.find { it.id == userId }?.default_cv_id ?: return null
         }
-        val cvId = cvRefs.firstOrNull()?.id ?: return null
-        return try {
-            client.get("https://scienta.flowcase.com/api/v1/users/$userId/cvs/$cvId") {
+    }
+
+    return buildFlowcaseClient().use { client ->
+        try {
+            client.get("https://scienta.flowcase.com/api/v3/cvs/$userId/$cvId") {
                 bearerAuth(apiKey)
             }.body()
         } catch (e: Exception) {
@@ -144,6 +160,5 @@ suspend fun fetchFlowcaseUsers(apiKey: String): List<FlowcaseUser> {
 }
 
 // Photo URL is embedded in the user object from /users/search (image.url).
-// Uploading photos uses POST /api/v1/users/<id>/image — no separate fetch needed.
 fun extractPhotoUrls(users: List<FlowcaseUser>): Map<String, String?> =
     users.associate { it.id to it.image?.url }

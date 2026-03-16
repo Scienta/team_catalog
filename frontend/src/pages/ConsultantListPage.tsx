@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; clientId?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; clientId?: string; technologies?: string[]; projectCustomers?: string[]; employers?: string[]; schools?: string[] }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -30,6 +30,63 @@ function contractBadge(c: Consultant) {
   return { cls, label: d < 0 ? 'Utløpt' : `${d}d` }
 }
 
+function FilterSection({ label, sectionKey, collapsed, onToggle, activeCount, children }: {
+  label: string; sectionKey: string; collapsed: Set<string>; onToggle: (k: string) => void; activeCount: number; children: React.ReactNode
+}) {
+  const isOpen = !collapsed.has(sectionKey)
+  return (
+    <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-3 first:border-0 first:pt-0 first:mt-0">
+      <button onClick={() => onToggle(sectionKey)} className="flex items-center justify-between w-full mb-2 group">
+        <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors">
+          {label}
+          {activeCount > 0 && <span className="ml-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeCount}</span>}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          className={`text-gray-300 dark:text-gray-700 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {isOpen && children}
+    </div>
+  )
+}
+
+function CVFilterList({ all, visible, selected, search, onSearch, idPrefix, onAdd, onRemove, emptyMsg }: {
+  all: string[]; visible: string[]; selected: Set<string>; search: string;
+  onSearch: (v: string) => void; idPrefix: string;
+  onAdd: (v: string) => void; onRemove: (v: string) => void; emptyMsg: string
+}) {
+  if (all.length === 0) return <p className="text-xs text-gray-300 dark:text-gray-700 px-1 py-1">{emptyMsg}</p>
+  const unselected = visible.filter((v) => !selected.has(v))
+  return (
+    <>
+      {selected.size > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {[...selected].map((v) => (
+            <button key={v} onClick={() => onRemove(v)}
+              className="inline-flex items-center gap-1 text-xs bg-gray-900 dark:bg-white text-white dark:text-gray-900 px-2 py-0.5 rounded-full max-w-full">
+              <span className="truncate max-w-[120px]">{v}</span>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="flex-shrink-0"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          ))}
+        </div>
+      )}
+      <input type="text" placeholder="Søk…" value={search} onChange={(e) => onSearch(e.target.value)}
+        className="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 mb-1.5 bg-white dark:bg-[#222] text-gray-700 dark:text-gray-300 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-400 dark:focus:ring-gray-600"
+      />
+      <div className="flex flex-col gap-0.5 max-h-44 overflow-y-auto">
+        {unselected.map((v) => (
+          <div key={v} className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <input type="checkbox" id={`${idPrefix}-${v}`} checked={false} onChange={() => onAdd(v)} className="rounded accent-gray-900 dark:accent-white flex-shrink-0" />
+            <label htmlFor={`${idPrefix}-${v}`} className="text-xs text-gray-600 dark:text-gray-400 cursor-pointer flex-1 leading-tight truncate">{v}</label>
+          </div>
+        ))}
+        {unselected.length === 0 && search && <p className="text-xs text-gray-300 dark:text-gray-700 px-1 py-1">Ingen treff</p>}
+      </div>
+    </>
+  )
+}
+
 export function ConsultantListPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [projects, setProjects] = useState<Project[]>([])
@@ -40,6 +97,15 @@ export function ConsultantListPage() {
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set())
+  const [selectedTechs, setSelectedTechs] = useState<Set<string>>(new Set())
+  const [techSearch, setTechSearch] = useState('')
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
+  const [projectSearch, setProjectSearch] = useState('')
+  const [selectedEmployers, setSelectedEmployers] = useState<Set<string>>(new Set())
+  const [employerSearch, setEmployerSearch] = useState('')
+  const [selectedSchools, setSelectedSchools] = useState<Set<string>>(new Set())
+  const [schoolSearch, setSchoolSearch] = useState('')
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set(['advanced', 'tech', 'projects', 'employers', 'schools']))
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -83,19 +149,37 @@ export function ConsultantListPage() {
   }
 
   function getFilteredConsultants(): Consultant[] {
-    if (selectedClientIds.size === 0) return consultants
-    const includedProjectIds = new Set<string>()
-    for (const clientId of selectedClientIds) {
-      const clientProjects = projects.filter((p) => p.clientId === clientId)
-      const checkedForClient = clientProjects.filter((p) => selectedProjectIds.has(p.id))
-      if (checkedForClient.length > 0) checkedForClient.forEach((p) => includedProjectIds.add(p.id))
-      else clientProjects.forEach((p) => includedProjectIds.add(p.id))
+    let result = consultants
+
+    if (selectedClientIds.size > 0) {
+      const includedProjectIds = new Set<string>()
+      for (const clientId of selectedClientIds) {
+        const clientProjects = projects.filter((p) => p.clientId === clientId)
+        const checkedForClient = clientProjects.filter((p) => selectedProjectIds.has(p.id))
+        if (checkedForClient.length > 0) checkedForClient.forEach((p) => includedProjectIds.add(p.id))
+        else clientProjects.forEach((p) => includedProjectIds.add(p.id))
+      }
+      const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
+      result = result.filter((c) =>
+        getConsultantProjects(c.id).some((p) => includedProjectIds.has(p.id)) ||
+        (c.clientId && selectedClientIds.has(c.clientId) && !inAnyProject.has(c.id))
+      )
     }
-    const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
-    return consultants.filter((c) =>
-      getConsultantProjects(c.id).some((p) => includedProjectIds.has(p.id)) ||
-      (c.clientId && selectedClientIds.has(c.clientId) && !inAnyProject.has(c.id))
-    )
+
+    if (selectedTechs.size > 0) {
+      result = result.filter((c) => c.technologies?.some((t) => selectedTechs.has(t)))
+    }
+    if (selectedProjects.size > 0) {
+      result = result.filter((c) => c.projectCustomers?.some((p) => selectedProjects.has(p)))
+    }
+    if (selectedEmployers.size > 0) {
+      result = result.filter((c) => c.employers?.some((e) => selectedEmployers.has(e)))
+    }
+    if (selectedSchools.size > 0) {
+      result = result.filter((c) => c.schools?.some((s) => selectedSchools.has(s)))
+    }
+
+    return result
   }
 
   function toggleClient(clientId: string) {
@@ -128,7 +212,19 @@ export function ConsultantListPage() {
   const withProject = active.filter((c) => getConsultantProjects(c.id).length > 0)
   const withContract = withProject.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
   const withoutContract = withProject.filter((c) => !c.contractEnd).sort((a, b) => a.name.localeCompare(b.name))
-  const hasFilter = selectedClientIds.size > 0
+  const allTechs = [...new Set(consultants.flatMap((c) => c.technologies ?? []))].sort((a, b) => a.localeCompare(b))
+  const visibleTechs = techSearch.trim() ? allTechs.filter((t) => t.toLowerCase().includes(techSearch.toLowerCase())) : allTechs
+  const allProjectCustomers = [...new Set(consultants.flatMap((c) => c.projectCustomers ?? []))].sort((a, b) => a.localeCompare(b))
+  const visibleProjects = projectSearch.trim() ? allProjectCustomers.filter((p) => p.toLowerCase().includes(projectSearch.toLowerCase())) : allProjectCustomers
+  const allEmployers = [...new Set(consultants.flatMap((c) => c.employers ?? []))].sort((a, b) => a.localeCompare(b))
+  const visibleEmployers = employerSearch.trim() ? allEmployers.filter((e) => e.toLowerCase().includes(employerSearch.toLowerCase())) : allEmployers
+  const allSchools = [...new Set(consultants.flatMap((c) => c.schools ?? []))].sort((a, b) => a.localeCompare(b))
+  const visibleSchools = schoolSearch.trim() ? allSchools.filter((s) => s.toLowerCase().includes(schoolSearch.toLowerCase())) : allSchools
+  const hasFilter = selectedClientIds.size > 0 || selectedTechs.size > 0 || selectedProjects.size > 0 || selectedEmployers.size > 0 || selectedSchools.size > 0
+
+  function toggleSection(key: string) {
+    setCollapsedSections((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next })
+  }
 
   // ── Tile card ──────────────────────────────────────────────────────────────
   function TileCard({ c, alert }: { c: Consultant; alert?: boolean }) {
@@ -181,16 +277,18 @@ export function ConsultantListPage() {
   return (
     <div className="flex gap-6 items-start">
       {/* Left sidebar filter */}
-      <div className="w-52 flex-shrink-0 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors sticky top-20">
+      <div className="w-60 flex-shrink-0 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Filtrer</span>
           {hasFilter && (
-            <button onClick={() => { setSelectedClientIds(new Set()); setSelectedProjectIds(new Set()); setExpandedClientIds(new Set()) }}
+            <button onClick={() => { setSelectedClientIds(new Set()); setSelectedProjectIds(new Set()); setExpandedClientIds(new Set()); setSelectedTechs(new Set()); setTechSearch(''); setSelectedProjects(new Set()); setProjectSearch(''); setSelectedEmployers(new Set()); setEmployerSearch(''); setSelectedSchools(new Set()); setSchoolSearch('') }}
               className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-              Nullstill
+              Nullstill alt
             </button>
           )}
         </div>
+
+        {/* ── Kunder ── */}
         <div className="flex flex-col gap-0.5">
           {clients.map((client) => {
             const clientProjects = projects.filter((p) => p.clientId === client.id)
@@ -221,6 +319,69 @@ export function ConsultantListPage() {
             )
           })}
           {clients.length === 0 && <p className="text-xs text-gray-400 dark:text-gray-600 px-1 py-2">Ingen kunder ennå</p>}
+        </div>
+
+        {/* ── Avansert filter ── */}
+        <div className="border-t border-gray-100 dark:border-gray-800 mt-3 pt-3">
+          <button onClick={() => toggleSection('advanced')}
+            className="flex items-center justify-between w-full group mb-2">
+            <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider group-hover:text-gray-600 dark:group-hover:text-gray-400 transition-colors">
+              Avansert
+              {(selectedTechs.size + selectedProjects.size + selectedEmployers.size + selectedSchools.size) > 0 && (
+                <span className="ml-1.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {selectedTechs.size + selectedProjects.size + selectedEmployers.size + selectedSchools.size}
+                </span>
+              )}
+            </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`text-gray-300 dark:text-gray-700 transition-transform ${!collapsedSections.has('advanced') ? 'rotate-180' : ''}`}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {!collapsedSections.has('advanced') && (
+            <div className="flex flex-col gap-1">
+              <FilterSection label="Teknologi" sectionKey="tech" collapsed={collapsedSections} onToggle={toggleSection} activeCount={selectedTechs.size}>
+                <CVFilterList
+                  all={allTechs} visible={visibleTechs} selected={selectedTechs}
+                  search={techSearch} onSearch={setTechSearch} idPrefix="tech"
+                  onAdd={(v) => setSelectedTechs((p) => new Set([...p, v]))}
+                  onRemove={(v) => setSelectedTechs((p) => { const n = new Set(p); n.delete(v); return n })}
+                  emptyMsg="Kjør synkroniser for å laste teknologier"
+                />
+              </FilterSection>
+
+              <FilterSection label="Prosjekterfaring" sectionKey="projects" collapsed={collapsedSections} onToggle={toggleSection} activeCount={selectedProjects.size}>
+                <CVFilterList
+                  all={allProjectCustomers} visible={visibleProjects} selected={selectedProjects}
+                  search={projectSearch} onSearch={setProjectSearch} idPrefix="proj"
+                  onAdd={(v) => setSelectedProjects((p) => new Set([...p, v]))}
+                  onRemove={(v) => setSelectedProjects((p) => { const n = new Set(p); n.delete(v); return n })}
+                  emptyMsg="Kjør synkroniser for å laste prosjekter"
+                />
+              </FilterSection>
+
+              <FilterSection label="Arbeidserfaring" sectionKey="employers" collapsed={collapsedSections} onToggle={toggleSection} activeCount={selectedEmployers.size}>
+                <CVFilterList
+                  all={allEmployers} visible={visibleEmployers} selected={selectedEmployers}
+                  search={employerSearch} onSearch={setEmployerSearch} idPrefix="emp"
+                  onAdd={(v) => setSelectedEmployers((p) => new Set([...p, v]))}
+                  onRemove={(v) => setSelectedEmployers((p) => { const n = new Set(p); n.delete(v); return n })}
+                  emptyMsg="Kjør synkroniser for å laste arbeidsgivere"
+                />
+              </FilterSection>
+
+              <FilterSection label="Utdanning" sectionKey="schools" collapsed={collapsedSections} onToggle={toggleSection} activeCount={selectedSchools.size}>
+                <CVFilterList
+                  all={allSchools} visible={visibleSchools} selected={selectedSchools}
+                  search={schoolSearch} onSearch={setSchoolSearch} idPrefix="school"
+                  onAdd={(v) => setSelectedSchools((p) => new Set([...p, v]))}
+                  onRemove={(v) => setSelectedSchools((p) => { const n = new Set(p); n.delete(v); return n })}
+                  emptyMsg="Kjør synkroniser for å laste skoler"
+                />
+              </FilterSection>
+            </div>
+          )}
         </div>
       </div>
 
@@ -265,7 +426,7 @@ export function ConsultantListPage() {
         {/* ── TILE VIEW ─────────────────────────────────────────────────────── */}
         {view === 'tile' ? (
           <div className="flex flex-col gap-6">
-            {!hasFilter && noProject.length > 0 && (
+            {selectedClientIds.size === 0 && noProject.length > 0 && (
               <div>
                 <p className="text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -305,7 +466,7 @@ export function ConsultantListPage() {
               </tr>
             </thead>
             <tbody>
-              {!hasFilter && noProject.map((c, i) => (
+              {selectedClientIds.size === 0 && noProject.map((c, i) => (
                 <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)}
                   className={`cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 border-l-4 border-red-500 bg-red-50 dark:bg-red-950/40 ${i === 0 ? '' : 'border-t border-red-100 dark:border-red-900/30'}`}>
                   <td className="px-5 py-3.5">
@@ -314,7 +475,19 @@ export function ConsultantListPage() {
                       <span className="font-medium text-gray-900 dark:text-white">{c.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-red-400 dark:text-red-500">–</td>
+                  <td className="px-5 py-3.5">
+                    {c.clientId ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs italic text-amber-600 dark:text-amber-400">Ikke tildelt prosjekt</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 w-fit">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          Handling kreves
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-red-300 dark:text-red-800">–</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-red-400 dark:text-red-500">{getClientNames(c.id)}</td>
                   <td className="px-5 py-3.5 text-red-400 dark:text-red-500">{c.contractEnd ?? '–'}</td>
                   <td className="px-5 py-3.5">
@@ -325,7 +498,7 @@ export function ConsultantListPage() {
                   </td>
                 </tr>
               ))}
-              {!hasFilter && noProject.length > 0 && (withContract.length > 0 || withoutContract.length > 0) && (
+              {selectedClientIds.size === 0 && noProject.length > 0 && (withContract.length > 0 || withoutContract.length > 0) && (
                 <tr><td colSpan={5} className="h-px bg-gray-100 dark:bg-gray-800 p-0" /></tr>
               )}
               {withContract.map((c) => {

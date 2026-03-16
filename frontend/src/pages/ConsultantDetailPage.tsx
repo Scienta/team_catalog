@@ -23,7 +23,7 @@ type CVWorkEntry = { id: string; employer?: string; description?: string; yearFr
 type CVProjectEntry = { id: string; customer?: string; roles: string[]; description?: string; yearFrom?: number; monthFrom?: number; yearTo?: number; monthTo?: number }
 type CVEducationEntry = { id: string; school?: string; degree?: string; yearFrom?: number; yearTo?: number }
 type CVTechGroup = { label?: string; tags: string[] }
-type CVKeyQual = { label?: string; tags: string[] }
+type CVKeyQual = { label?: string; description?: string }
 type CVData = {
   workExperience: CVWorkEntry[]
   projectExperience: CVProjectEntry[]
@@ -312,15 +312,11 @@ export function ConsultantDetailPage() {
           {cv && cv.keyQualifications.length > 0 && (
             <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5 flex flex-col gap-4 transition-colors">
               <h2 className="text-xs font-semibold text-gray-400 dark:text-gray-600 uppercase tracking-wider">Nøkkelkvalifikasjoner</h2>
-              <div className="flex flex-col gap-3">
-                {cv.keyQualifications.map((kq) => (
-                  <div key={kq.label ?? Math.random()}>
-                    {kq.label && <p className="text-xs font-medium text-gray-500 dark:text-gray-500 mb-1.5">{kq.label}</p>}
-                    <div className="flex flex-wrap gap-1.5">
-                      {kq.tags.map((tag) => (
-                        <span key={tag} className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2.5 py-1 rounded-full">{tag}</span>
-                      ))}
-                    </div>
+              <div className="flex flex-col divide-y divide-gray-100 dark:divide-gray-800">
+                {cv.keyQualifications.map((kq, i) => (
+                  <div key={kq.label ?? i} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-1">
+                    {kq.label && <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{kq.label}</p>}
+                    {kq.description && <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-line">{kq.description}</p>}
                   </div>
                 ))}
               </div>
