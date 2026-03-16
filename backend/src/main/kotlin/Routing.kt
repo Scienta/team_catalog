@@ -25,6 +25,30 @@ data class LookupUserRequest(val email: String)
 @Serializable
 data class LookupUserResponse(val uid: String, val name: String, val email: String)
 
+@Serializable
+data class CVWorkEntry(val id: String, val employer: String?, val description: String?, val yearFrom: Int?, val monthFrom: Int?, val yearTo: Int?, val monthTo: Int?)
+
+@Serializable
+data class CVProjectEntry(val id: String, val customer: String?, val roles: List<String>, val description: String?, val yearFrom: Int?, val monthFrom: Int?, val yearTo: Int?, val monthTo: Int?)
+
+@Serializable
+data class CVEducationEntry(val id: String, val school: String?, val degree: String?, val yearFrom: Int?, val yearTo: Int?)
+
+@Serializable
+data class CVTechGroup(val label: String?, val tags: List<String>)
+
+@Serializable
+data class CVKeyQual(val label: String?, val tags: List<String>)
+
+@Serializable
+data class ConsultantCVResponse(
+    val workExperience: List<CVWorkEntry>,
+    val projectExperience: List<CVProjectEntry>,
+    val education: List<CVEducationEntry>,
+    val technologies: List<CVTechGroup>,
+    val keyQualifications: List<CVKeyQual>
+)
+
 fun Application.configureRouting(config: AppConfig) {
     install(StatusPages) {
         exception<Throwable> { call, cause ->
@@ -125,6 +149,39 @@ fun Application.configureRouting(config: AppConfig) {
                 .get()
             firestore.collection("pendingAdmins").document(email).delete().get()
             call.respond(mapOf("promoted" to true))
+        }
+
+        get("/cv/{consultantId}") {
+            call.authenticateFirebase() ?: return@get
+
+            val consultantId = call.parameters["consultantId"] ?: run {
+                call.respond(HttpStatusCode.BadRequest, "Missing consultantId")
+                return@get
+            }
+
+            val cv = fetchConsultantCV(config.flowcaseApiKey, consultantId)
+            if (cv == null) {
+                call.respond(ConsultantCVResponse(emptyList(), emptyList(), emptyList(), emptyList(), emptyList()))
+                return@get
+            }
+
+            call.respond(ConsultantCVResponse(
+                workExperience = cv.work_experience
+                    .sortedWith(compareByDescending<FlowcaseWorkExp> { it.year_from }.thenByDescending { it.month_from })
+                    .map { CVWorkEntry(it.id, it.employer?.text(), it.description?.text(), it.year_from, it.month_from, it.year_to, it.month_to) },
+                projectExperience = cv.project_experiences
+                    .sortedWith(compareByDescending<FlowcaseProjExp> { it.year_from }.thenByDescending { it.month_from })
+                    .map { CVProjectEntry(it.id, it.customer?.text(), it.roles.mapNotNull { r -> r.name?.text() }, (it.long_description ?: it.description)?.text(), it.year_from, it.month_from, it.year_to, it.month_to) },
+                education = cv.education
+                    .sortedByDescending { it.year_from }
+                    .map { CVEducationEntry(it.id, it.school?.text(), it.degree?.text(), it.year_from, it.year_to) },
+                technologies = cv.technologies
+                    .map { CVTechGroup(it.label?.text(), it.tags.mapNotNull { t -> t.name?.text() }) }
+                    .filter { it.tags.isNotEmpty() },
+                keyQualifications = cv.key_qualifications
+                    .map { CVKeyQual(it.label?.text(), it.tags.mapNotNull { t -> t.name?.text() }) }
+                    .filter { it.tags.isNotEmpty() }
+            ))
         }
 
         post("/check-contracts") {
