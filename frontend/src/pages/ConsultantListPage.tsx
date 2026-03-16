@@ -4,7 +4,7 @@ import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; projectId?: string; contractEnd?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; projectIds?: string[]; contractEnd?: string }
 type Project = { id: string; name: string; clientId: string }
 type Client = { id: string; name: string }
 
@@ -55,16 +55,15 @@ export function ConsultantListPage() {
     finally { setSyncing(false) }
   }
 
-  function getClientName(c: Consultant): string {
-    if (!c.projectId) return '–'
-    const project = projects[c.projectId]
-    if (!project) return '–'
-    return clients[project.clientId] ?? '–'
+  function getProjectNames(c: Consultant): string {
+    if (!c.projectIds?.length) return '–'
+    return c.projectIds.map((pid) => projects[pid]?.name).filter(Boolean).join(', ') || '–'
   }
 
-  function getProjectName(c: Consultant): string {
-    if (!c.projectId) return '–'
-    return projects[c.projectId]?.name ?? '–'
+  function getClientNames(c: Consultant): string {
+    if (!c.projectIds?.length) return '–'
+    const clientIds = [...new Set(c.projectIds.map((pid) => projects[pid]?.clientId).filter(Boolean))]
+    return clientIds.map((cid) => clients[cid!]).filter(Boolean).join(', ') || '–'
   }
 
   const withContract = consultants.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
@@ -108,8 +107,8 @@ export function ConsultantListPage() {
                       <span className="font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getProjectName(c)}</td>
-                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getClientName(c)}</td>
+                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getProjectNames(c)}</td>
+                  <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{getClientNames(c)}</td>
                   <td className="px-5 py-3.5 text-gray-500 dark:text-gray-400">{c.contractEnd}</td>
                   <td className="px-5 py-3.5"><span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${badge}`}>{label}</span></td>
                 </tr>
@@ -123,8 +122,8 @@ export function ConsultantListPage() {
                     <span className="font-medium text-gray-600 dark:text-gray-400">{c.name}</span>
                   </div>
                 </td>
-                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getProjectName(c)}</td>
-                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getClientName(c)}</td>
+                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getProjectNames(c)}</td>
+                <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">{getClientNames(c)}</td>
                 <td className="px-5 py-3.5 text-gray-400 dark:text-gray-600">–</td>
                 <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700 text-xs">Ingen kontrakt</td>
               </tr>

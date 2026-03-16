@@ -6,7 +6,7 @@ import { db } from '../firebase'
 type Consultant = {
   name: string
   photoUrl?: string
-  projectId?: string
+  projectIds?: string[]
   contractStart?: string
   contractEnd?: string
   warningDate?: string
@@ -28,7 +28,7 @@ export function ConsultantDetailPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const [projectId, setProjectId] = useState('')
+  const [projectIds, setProjectIds] = useState<string[]>([])
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDate, setWarningDate] = useState('')
@@ -41,30 +41,24 @@ export function ConsultantDetailPage() {
       if (!snap.exists()) return
       const data = snap.data() as Consultant
       setConsultant(data)
-      setProjectId(data.projectId ?? '')
+      setProjectIds(data.projectIds ?? [])
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
       setWarningDate(data.warningDate ?? '')
       setNotifyAll(data.notifyAll ?? true)
       setNotifyList(data.notifyList ?? [])
     })
-    const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
-      setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Client)).sort((a, b) => a.name.localeCompare(b.name)))
-    })
-    const unsubProjects = onSnapshot(collection(db, 'projects'), (snap) => {
-      setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Project)))
-    })
-    const unsubAdmins = onSnapshot(collection(db, 'admins'), (snap) => {
-      setAdmins(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Admin)))
-    })
-    return () => { unsubClients(); unsubProjects(); unsubAdmins() }
+    const u1 = onSnapshot(collection(db, 'clients'), (s) => setClients(s.docs.map((d) => ({ id: d.id, ...d.data() } as Client)).sort((a, b) => a.name.localeCompare(b.name))))
+    const u2 = onSnapshot(collection(db, 'projects'), (s) => setProjects(s.docs.map((d) => ({ id: d.id, ...d.data() } as Project))))
+    const u3 = onSnapshot(collection(db, 'admins'), (s) => setAdmins(s.docs.map((d) => ({ id: d.id, ...d.data() } as Admin))))
+    return () => { u1(); u2(); u3() }
   }, [id])
 
   async function handleSave() {
     if (!id) return
     setSaving(true)
     await updateDoc(doc(db, 'consultants', id), {
-      projectId: projectId || null,
+      projectIds,
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
       warningDate: warningDate || null,
@@ -74,6 +68,10 @@ export function ConsultantDetailPage() {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  function toggleProject(pid: string) {
+    setProjectIds((prev) => prev.includes(pid) ? prev.filter((x) => x !== pid) : [...prev, pid])
   }
 
   function toggleNotifyAdmin(uid: string) {
@@ -103,23 +101,36 @@ export function ConsultantDetailPage() {
 
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors">
 
-        {/* Prosjekt (gruppert per kunde) */}
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass}>Prosjekt</label>
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inputClass}>
-            <option value="">– Ikke i oppdrag –</option>
-            {clients.map((client) => {
-              const clientProjects = projects.filter((p) => p.clientId === client.id)
-              if (clientProjects.length === 0) return null
-              return (
-                <optgroup key={client.id} label={client.name}>
+        {/* Prosjekter — gruppert per kunde */}
+        <div className="flex flex-col gap-2">
+          <label className={labelClass}>Prosjekter</label>
+          {clients.map((client) => {
+            const clientProjects = projects.filter((p) => p.clientId === client.id)
+            if (clientProjects.length === 0) return null
+            return (
+              <div key={client.id}>
+                <p className="text-xs font-medium text-gray-400 dark:text-gray-600 mb-1.5 mt-1">{client.name}</p>
+                <div className="flex flex-col gap-1.5 pl-2">
                   {clientProjects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <label key={p.id} className="flex items-center gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={projectIds.includes(p.id)}
+                        onChange={() => toggleProject(p.id)}
+                        className="rounded accent-gray-900 dark:accent-white"
+                      />
+                      <span className={`text-sm transition-colors ${projectIds.includes(p.id) ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-800 dark:group-hover:text-gray-200'}`}>
+                        {p.name}
+                      </span>
+                    </label>
                   ))}
-                </optgroup>
-              )
-            })}
-          </select>
+                </div>
+              </div>
+            )
+          })}
+          {clients.every((c) => projects.filter((p) => p.clientId === c.id).length === 0) && (
+            <p className="text-sm text-gray-400 dark:text-gray-600 italic">Ingen prosjekter opprettet ennå</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">

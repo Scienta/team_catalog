@@ -26,7 +26,7 @@ type Consultant = {
   id: string
   name: string
   photoUrl?: string
-  projectId?: string
+  projectIds?: string[]
 }
 
 const inputClass = "border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent transition-all w-full"
@@ -183,7 +183,7 @@ export function ClientDetailPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {projects.map((p) => {
-            const assigned = consultants.filter((c) => c.projectId === p.id)
+            const assigned = consultants.filter((c) => c.projectIds?.includes(p.id))
             return (
               <ProjectCard
                 key={p.id}
