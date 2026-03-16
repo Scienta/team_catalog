@@ -24,7 +24,7 @@ Scienta_team_catalog/
 - [x] Initialiser git i rot (`git init`)
 - [x] Lag `.gitignore` (node_modules, .env, build/, .gradle/, *.jar)
 - [x] Første commit med docs
-- [ ] Push til Scienta GitHub org når invitasjon er mottatt
+- [x] Push til Scienta GitHub org når invitasjon er mottatt
 
 ### 1.3 Firebase prosjekt
 - [x] Opprett nytt Firebase-prosjekt på console.firebase.google.com
