@@ -20,8 +20,12 @@ export function useAuth(): AuthState {
         return
       }
 
-      const adminDoc = await getDoc(doc(db, 'admins', user.uid))
-      setState({ user, isAdmin: adminDoc.exists(), loading: false })
+      try {
+        const adminDoc = await getDoc(doc(db, 'admins', user.uid))
+        setState({ user, isAdmin: adminDoc.exists(), loading: false })
+      } catch {
+        setState({ user, isAdmin: false, loading: false })
+      }
     })
 
     return unsubscribe

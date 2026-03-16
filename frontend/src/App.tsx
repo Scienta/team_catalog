@@ -1,10 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { LoginPage } from './pages/LoginPage'
-
-function ConsultantListPage() {
-  return <div>Consultant List</div>
-}
+import { ConsultantListPage } from './pages/ConsultantListPage'
 
 function ConsultantDetailPage() {
   return <div>Consultant Detail</div>

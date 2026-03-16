@@ -125,14 +125,14 @@ npm install -D tailwindcss @tailwindcss/vite
 - [x] Redirect til `/` ved suksess
 
 ### 3.4 Konsulentliste (`/`)
-- [ ] Real-time Firestore listener på `consultants` collection
-- [ ] Vis tabell med: foto (rundt bilde), navn, klientnavn, kontraktslutt, dager igjen
-- [ ] Fargeindikator per rad:
+- [x] Real-time Firestore listener på `consultants` collection
+- [x] Vis tabell med: foto (rundt bilde), navn, klientnavn, kontraktslutt, dager igjen
+- [x] Fargeindikator per rad:
   - Grønn: > 30 dager igjen
   - Gul: ≤ 30 dager igjen
   - Rød: ≤ 7 dager eller utløpt
-- [ ] Konsulenter uten kontrakt vises nederst uten fargeindikator
-- [ ] "Synkroniser"-knapp øverst til høyre:
+- [x] Konsulenter uten kontrakt vises nederst uten fargeindikator
+- [x] "Synkroniser"-knapp øverst til høyre:
   - Henter Firebase ID-token med `getIdToken()`
   - Kaller `POST /sync` på Ktor
   - Viser loading-spinner under synk
@@ -154,6 +154,18 @@ npm install -D tailwindcss @tailwindcss/vite
 - [ ] Åpnes når admin velger "Legg til ny kunde" i dropdown
 - [ ] Felt: navn (påkrevd), kontaktperson (valgfritt), notater (valgfritt)
 - [ ] Lagrer til `clients` collection, velger automatisk den nye kunden i dropdownen
+
+### 3.7 Admin-administrasjon
+- [ ] Egen side `/admins` tilgjengelig fra navigasjon
+- [ ] Vis liste over eksisterende admins (navn, e-post)
+- [ ] Legg til ny admin: søk opp bruker med e-post → hent UID fra Firebase Auth via Ktor-endepunkt → skriv til `admins` collection
+- [ ] Fjern admin: slett dokument fra `admins` collection (ikke tillat å slette seg selv)
+
+#### Nytt Ktor-endepunkt: `POST /admin/lookup-user`
+- [ ] Beskytt med `authenticateFirebase()`
+- [ ] Ta imot `{ "email": "..." }` i body
+- [ ] Kall Firebase Admin SDK: `FirebaseAuth.getInstance().getUserByEmail(email)`
+- [ ] Returner `{ "uid": "...", "name": "...", "email": "..." }` eller `404` hvis ikke funnet
 
 ---
 

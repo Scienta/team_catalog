@@ -31,8 +31,9 @@ fun buildFlowcaseClient(): HttpClient = HttpClient(CIO) {
 
 suspend fun fetchFlowcaseUsers(apiKey: String): List<FlowcaseUser> {
     buildFlowcaseClient().use { client ->
-        return client.get("https://api.flowcase.com/api/v2/users/search") {
+        return client.get("https://scienta.flowcase.com/api/v2/users/search") {
             bearerAuth(apiKey)
+            parameter("limit", 100)
         }.body()
     }
 }
