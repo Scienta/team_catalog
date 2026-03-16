@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { BoardPage } from './pages/BoardPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
 import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
 import { AdminsPage } from './pages/AdminsPage'
@@ -31,6 +32,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/board" element={<ProtectedRoute><Layout><BoardPage /></Layout></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute><Layout><ClientsPage /></Layout></ProtectedRoute>} />
         <Route path="/clients/:id" element={<ProtectedRoute><Layout><ClientDetailPage /></Layout></ProtectedRoute>} />
         <Route
