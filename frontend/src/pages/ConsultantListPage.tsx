@@ -20,12 +20,23 @@ function contractStatusStyle(days: number) {
   return { row: 'border-l-2 border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400', label: `${days}d` }
 }
 
+function contractBadge(c: Consultant) {
+  if (!c.contractEnd) return null
+  const d = daysUntil(c.contractEnd)
+  if (d > 30) return null
+  const cls = d < 0 || d <= 7
+    ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
+    : 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
+  return { cls, label: d < 0 ? 'Utløpt' : `${d}d` }
+}
+
 export function ConsultantListPage() {
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [view, setView] = useState<'list' | 'tile'>('list')
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set())
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set())
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set())
@@ -66,28 +77,16 @@ export function ConsultantListPage() {
     return clientIds.map((cid) => clients.find((c) => c.id === cid)?.name).filter(Boolean).join(', ') || '–'
   }
 
-  // Filter logic
   function getFilteredConsultants(): Consultant[] {
     if (selectedClientIds.size === 0) return consultants
-
-    // Build the set of project IDs to include
     const includedProjectIds = new Set<string>()
     for (const clientId of selectedClientIds) {
       const clientProjects = projects.filter((p) => p.clientId === clientId)
       const checkedForClient = clientProjects.filter((p) => selectedProjectIds.has(p.id))
-      if (checkedForClient.length > 0) {
-        // Specific projects selected for this client
-        checkedForClient.forEach((p) => includedProjectIds.add(p.id))
-      } else {
-        // Client selected but no specific projects → include all projects for this client
-        clientProjects.forEach((p) => includedProjectIds.add(p.id))
-      }
+      if (checkedForClient.length > 0) checkedForClient.forEach((p) => includedProjectIds.add(p.id))
+      else clientProjects.forEach((p) => includedProjectIds.add(p.id))
     }
-
-    return consultants.filter((c) => {
-      const cProjects = getConsultantProjects(c.id)
-      return cProjects.some((p) => includedProjectIds.has(p.id))
-    })
+    return consultants.filter((c) => getConsultantProjects(c.id).some((p) => includedProjectIds.has(p.id)))
   }
 
   function toggleClient(clientId: string) {
@@ -95,12 +94,7 @@ export function ConsultantListPage() {
       const next = new Set(prev)
       if (next.has(clientId)) {
         next.delete(clientId)
-        // Deselect all projects for this client
-        setSelectedProjectIds((pp) => {
-          const np = new Set(pp)
-          projects.filter((p) => p.clientId === clientId).forEach((p) => np.delete(p.id))
-          return np
-        })
+        setSelectedProjectIds((pp) => { const np = new Set(pp); projects.filter((p) => p.clientId === clientId).forEach((p) => np.delete(p.id)); return np })
         setExpandedClientIds((ep) => { const ne = new Set(ep); ne.delete(clientId); return ne })
       } else {
         next.add(clientId)
@@ -111,21 +105,11 @@ export function ConsultantListPage() {
   }
 
   function toggleProject(projectId: string) {
-    setSelectedProjectIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(projectId)) next.delete(projectId)
-      else next.add(projectId)
-      return next
-    })
+    setSelectedProjectIds((prev) => { const next = new Set(prev); next.has(projectId) ? next.delete(projectId) : next.add(projectId); return next })
   }
 
   function toggleExpanded(clientId: string) {
-    setExpandedClientIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(clientId)) next.delete(clientId)
-      else next.add(clientId)
-      return next
-    })
+    setExpandedClientIds((prev) => { const next = new Set(prev); next.has(clientId) ? next.delete(clientId) : next.add(clientId); return next })
   }
 
   const filtered = getFilteredConsultants()
@@ -135,69 +119,88 @@ export function ConsultantListPage() {
   const withProject = active.filter((c) => getConsultantProjects(c.id).length > 0)
   const withContract = withProject.filter((c) => c.contractEnd).sort((a, b) => new Date(a.contractEnd!).getTime() - new Date(b.contractEnd!).getTime())
   const withoutContract = withProject.filter((c) => !c.contractEnd).sort((a, b) => a.name.localeCompare(b.name))
-
   const hasFilter = selectedClientIds.size > 0
+
+  // ── Tile card ──────────────────────────────────────────────────────────────
+  function TileCard({ c, alert }: { c: Consultant; alert?: boolean }) {
+    const badge = c.contractEnd ? contractBadge(c) : null
+    const projectName = getProjectNames(c.id)
+    const clientName = getClientNames(c.id)
+    return (
+      <div
+        onClick={() => navigate(`/consultant/${c.id}`)}
+        className={`group cursor-pointer rounded-2xl border bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-all flex flex-col items-center gap-3 p-5 ${
+          alert ? 'border-red-200 dark:border-red-900 bg-red-50/40 dark:bg-red-950/20'
+          : c.isInternal ? 'border-gray-100 dark:border-gray-800 opacity-70'
+          : 'border-gray-100 dark:border-gray-800'
+        }`}
+      >
+        {/* Photo */}
+        <div className="relative">
+          {c.photoUrl
+            ? <img src={c.photoUrl} alt={c.name} className="w-16 h-16 rounded-full object-cover" />
+            : <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-semibold ${alert ? 'bg-red-100 dark:bg-red-900/40 text-red-500' : 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600'}`}>{c.name?.charAt(0)}</div>
+          }
+          {alert && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#1a1a1a] animate-pulse" />}
+          {badge && !alert && (
+            <span className={`absolute -bottom-1 left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+          )}
+        </div>
+
+        {/* Name */}
+        <div className="text-center w-full">
+          <p className={`text-sm font-semibold leading-tight ${alert ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{c.name}</p>
+          {c.isInternal
+            ? <p className="text-xs text-gray-300 dark:text-gray-700 mt-0.5">Intern</p>
+            : alert
+            ? <p className="text-xs text-red-400 dark:text-red-500 mt-0.5">Uten prosjekt</p>
+            : (
+              <>
+                {clientName !== '–' && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{clientName}</p>}
+                {projectName !== '–' && <p className="text-xs text-gray-300 dark:text-gray-700 truncate">{projectName}</p>}
+              </>
+            )
+          }
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex gap-6 items-start">
       {/* Left sidebar filter */}
-      <div className="w-52 flex-shrink-0 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors">
+      <div className="w-52 flex-shrink-0 bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-4 transition-colors sticky top-20">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Filtrer</span>
           {hasFilter && (
-            <button
-              onClick={() => { setSelectedClientIds(new Set()); setSelectedProjectIds(new Set()); setExpandedClientIds(new Set()) }}
-              className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-            >
+            <button onClick={() => { setSelectedClientIds(new Set()); setSelectedProjectIds(new Set()); setExpandedClientIds(new Set()) }}
+              className="text-xs text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
               Nullstill
             </button>
           )}
         </div>
-
         <div className="flex flex-col gap-0.5">
           {clients.map((client) => {
             const clientProjects = projects.filter((p) => p.clientId === client.id)
             const isChecked = selectedClientIds.has(client.id)
             const isExpanded = expandedClientIds.has(client.id)
-
             return (
               <div key={client.id}>
                 <div className="flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <input
-                    type="checkbox"
-                    id={`client-${client.id}`}
-                    checked={isChecked}
-                    onChange={() => toggleClient(client.id)}
-                    className="rounded accent-gray-900 dark:accent-white flex-shrink-0"
-                  />
-                  <label htmlFor={`client-${client.id}`} className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex-1 leading-tight">
-                    {client.name}
-                  </label>
+                  <input type="checkbox" id={`client-${client.id}`} checked={isChecked} onChange={() => toggleClient(client.id)} className="rounded accent-gray-900 dark:accent-white flex-shrink-0" />
+                  <label htmlFor={`client-${client.id}`} className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex-1 leading-tight">{client.name}</label>
                   {clientProjects.length > 0 && isChecked && (
-                    <button
-                      onClick={() => toggleExpanded(client.id)}
-                      className="text-gray-300 dark:text-gray-700 hover:text-gray-500 dark:hover:text-gray-500 text-xs transition-colors"
-                    >
+                    <button onClick={() => toggleExpanded(client.id)} className="text-gray-300 dark:text-gray-700 hover:text-gray-500 text-xs transition-colors">
                       {isExpanded ? '▲' : '▼'}
                     </button>
                   )}
                 </div>
-
-                {/* Projects under client */}
                 {isChecked && isExpanded && clientProjects.length > 0 && (
                   <div className="ml-5 flex flex-col gap-0.5 mb-1">
                     {clientProjects.map((project) => (
                       <div key={project.id} className="flex items-center gap-2 px-1 py-1 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <input
-                          type="checkbox"
-                          id={`project-${project.id}`}
-                          checked={selectedProjectIds.has(project.id)}
-                          onChange={() => toggleProject(project.id)}
-                          className="rounded accent-gray-900 dark:accent-white flex-shrink-0"
-                        />
-                        <label htmlFor={`project-${project.id}`} className="text-xs text-gray-500 dark:text-gray-500 cursor-pointer flex-1 leading-tight">
-                          {project.name}
-                        </label>
+                        <input type="checkbox" id={`project-${project.id}`} checked={selectedProjectIds.has(project.id)} onChange={() => toggleProject(project.id)} className="rounded accent-gray-900 dark:accent-white flex-shrink-0" />
+                        <label htmlFor={`project-${project.id}`} className="text-xs text-gray-500 dark:text-gray-500 cursor-pointer flex-1 leading-tight">{project.name}</label>
                       </div>
                     ))}
                   </div>
@@ -205,10 +208,7 @@ export function ConsultantListPage() {
               </div>
             )
           })}
-
-          {clients.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-gray-600 px-1 py-2">Ingen kunder ennå</p>
-          )}
+          {clients.length === 0 && <p className="text-xs text-gray-400 dark:text-gray-600 px-1 py-2">Ingen kunder ennå</p>}
         </div>
       </div>
 
@@ -223,6 +223,24 @@ export function ConsultantListPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* View toggle */}
+            <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+              <button onClick={() => setView('list')} title="Listevisning"
+                className={`p-1.5 rounded-lg transition-all ${view === 'list' ? 'bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-600 hover:text-gray-600'}`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </button>
+              <button onClick={() => setView('tile')} title="Flisvisning"
+                className={`p-1.5 rounded-lg transition-all ${view === 'tile' ? 'bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-600 hover:text-gray-600'}`}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+              </button>
+            </div>
+
             {syncMsg && <span className="text-xs text-gray-400 dark:text-gray-500">{syncMsg}</span>}
             <button onClick={handleSync} disabled={syncing}
               className="flex items-center gap-2 bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40 text-white dark:text-gray-900 text-sm font-medium px-4 py-2 rounded-xl transition-colors">
@@ -232,6 +250,39 @@ export function ConsultantListPage() {
           </div>
         </div>
 
+        {/* ── TILE VIEW ─────────────────────────────────────────────────────── */}
+        {view === 'tile' ? (
+          <div className="flex flex-col gap-6">
+            {!hasFilter && noProject.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-red-500 dark:text-red-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  Uten prosjekt
+                </p>
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+                  {noProject.map((c) => <TileCard key={c.id} c={c} alert />)}
+                </div>
+              </div>
+            )}
+            {[...withContract, ...withoutContract].length > 0 && (
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+                {[...withContract, ...withoutContract].map((c) => <TileCard key={c.id} c={c} />)}
+              </div>
+            )}
+            {interne.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-3">Interne ansatte</p>
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+                  {interne.map((c) => <TileCard key={c.id} c={c} />)}
+                </div>
+              </div>
+            )}
+            {active.length === 0 && interne.length === 0 && (
+              <p className="text-center text-sm text-gray-400 dark:text-gray-600 py-10">Ingen konsulenter matcher filteret</p>
+            )}
+          </div>
+        ) : (
+        /* ── LIST VIEW ────────────────────────────────────────────────────── */
         <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm transition-colors">
           <table className="w-full text-sm">
             <thead>
@@ -242,7 +293,6 @@ export function ConsultantListPage() {
               </tr>
             </thead>
             <tbody>
-              {/* No project — crisis red (only shown when no filter active) */}
               {!hasFilter && noProject.map((c, i) => (
                 <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)}
                   className={`cursor-pointer transition-all hover:brightness-95 dark:hover:brightness-110 border-l-4 border-red-500 bg-red-50 dark:bg-red-950/40 ${i === 0 ? '' : 'border-t border-red-100 dark:border-red-900/30'}`}>
@@ -263,11 +313,9 @@ export function ConsultantListPage() {
                   </td>
                 </tr>
               ))}
-
               {!hasFilter && noProject.length > 0 && (withContract.length > 0 || withoutContract.length > 0) && (
                 <tr><td colSpan={5} className="h-px bg-gray-100 dark:bg-gray-800 p-0" /></tr>
               )}
-
               {withContract.map((c) => {
                 const days = daysUntil(c.contractEnd!)
                 const { row, badge, label } = contractStatusStyle(days)
@@ -286,7 +334,6 @@ export function ConsultantListPage() {
                   </tr>
                 )
               })}
-
               {withoutContract.map((c, i) => (
                 <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)} className={`cursor-pointer transition-all hover:bg-gray-50/80 dark:hover:bg-gray-800/40 ${i === 0 && withContract.length > 0 ? 'border-t-2 border-gray-100 dark:border-gray-800' : ''}`}>
                   <td className="px-5 py-3.5">
@@ -301,15 +348,9 @@ export function ConsultantListPage() {
                   <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700 text-xs">Ingen kontrakt</td>
                 </tr>
               ))}
-
-              {/* Internal employees — own section, no red warnings */}
               {interne.length > 0 && (
                 <>
-                  <tr>
-                    <td colSpan={5} className="px-5 pt-5 pb-1">
-                      <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Interne ansatte</span>
-                    </td>
-                  </tr>
+                  <tr><td colSpan={5} className="px-5 pt-5 pb-1"><span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Interne ansatte</span></td></tr>
                   {interne.map((c) => (
                     <tr key={c.id} onClick={() => navigate(`/consultant/${c.id}`)}
                       className="cursor-pointer transition-all hover:bg-gray-50/80 dark:hover:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800">
@@ -322,24 +363,18 @@ export function ConsultantListPage() {
                       <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
                       <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
                       <td className="px-5 py-3.5 text-gray-300 dark:text-gray-700">–</td>
-                      <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600">Intern</span>
-                      </td>
+                      <td className="px-5 py-3.5"><span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600">Intern</span></td>
                     </tr>
                   ))}
                 </>
               )}
-
               {active.length === 0 && interne.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-400 dark:text-gray-600">
-                    Ingen konsulenter matcher filteret
-                  </td>
-                </tr>
+                <tr><td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-400 dark:text-gray-600">Ingen konsulenter matcher filteret</td></tr>
               )}
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   )
