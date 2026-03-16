@@ -270,7 +270,7 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
           <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
             {/* Assigned */}
             {assigned.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 last:border-b-0 bg-gray-50/60 dark:bg-gray-800/30 group">
+              <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 last:border-b-0 bg-gray-50/60 dark:bg-gray-800/30">
                 <div className="flex items-center gap-2.5">
                   {c.photoUrl ? (
                     <img src={c.photoUrl} alt={c.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
@@ -281,7 +281,7 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
                 </div>
                 <button
                   onClick={() => handleRemoveConsultant(c.id)}
-                  className="text-xs text-gray-300 dark:text-gray-700 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 px-1"
+                  className="text-xs text-gray-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors px-1"
                   title="Fjern fra prosjekt"
                 >
                   Fjern
