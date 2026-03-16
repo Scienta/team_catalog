@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../firebase'
+import { db } from '../firebase'
 
 type Client = {
   name: string
@@ -11,7 +10,6 @@ type Client = {
   contactName?: string
   contactPhone?: string
   contactEmail?: string
-  logoUrl?: string
 }
 
 type Project = {
@@ -40,8 +38,6 @@ export function ClientDetailPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [consultants, setConsultants] = useState<Consultant[]>([])
   const [saved, setSaved] = useState(false)
-  const [uploadingLogo, setUploadingLogo] = useState(false)
-  const logoInputRef = useRef<HTMLInputElement>(null)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -81,17 +77,6 @@ export function ClientDetailPage() {
     return () => { unsubClient(); unsubProjects(); unsubConsultants() }
   }, [id])
 
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !id) return
-    setUploadingLogo(true)
-    const storageRef = ref(storage, `client-logos/${id}`)
-    await uploadBytes(storageRef, file)
-    const url = await getDownloadURL(storageRef)
-    await updateDoc(doc(db, 'clients', id), { logoUrl: url })
-    setUploadingLogo(false)
-  }
-
   async function handleSaveClient() {
     if (!id) return
     await updateDoc(doc(db, 'clients', id), { name, description: description || null, slackChannel: slackChannel || null, contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null })
@@ -123,38 +108,6 @@ export function ClientDetailPage() {
       </div>
 
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 mb-6 transition-colors">
-
-        {/* Logo */}
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => logoInputRef.current?.click()}
-            disabled={uploadingLogo}
-            className="relative w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 flex items-center justify-center overflow-hidden transition-colors group flex-shrink-0"
-          >
-            {uploadingLogo ? (
-              <svg className="animate-spin h-5 w-5 text-gray-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-            ) : client.logoUrl ? (
-              <>
-                <img src={client.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <span className="text-white text-[10px] font-medium">Bytt</span>
-                </div>
-              </>
-            ) : (
-              <svg className="w-6 h-6 text-gray-300 dark:text-gray-700 group-hover:text-gray-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            )}
-          </button>
-          <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-          <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Logo</p>
-            <p className="text-xs text-gray-400 dark:text-gray-600 mt-0.5">{client.logoUrl ? 'Klikk for å bytte' : 'Klikk for å laste opp'}</p>
-          </div>
-        </div>
-
-        <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
         <div className="flex flex-col gap-1.5">
           <label className={labelClass}>Kundenavn</label>
