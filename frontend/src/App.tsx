@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
+import { DashboardPage } from './pages/DashboardPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
 import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
 import { AdminsPage } from './pages/AdminsPage'
@@ -13,8 +14,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<ProtectedRoute><Layout><DashboardPage /></Layout></ProtectedRoute>} />
         <Route
-          path="/"
+          path="/consultants"
           element={
             <ProtectedRoute>
               <Layout><ConsultantListPage /></Layout>

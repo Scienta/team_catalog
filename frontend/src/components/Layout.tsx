@@ -44,6 +44,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
+              Dashboard
+            </Link>
+            <Link
+              to="/consultants"
+              className={`text-sm font-medium transition-colors pb-0.5 ${
+                location.pathname === '/consultants' || location.pathname.startsWith('/consultant/')
+                  ? 'text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
               Konsulenter
             </Link>
             <Link
@@ -64,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
-              Administratorer
+              Admins
             </Link>
 
             <div className="flex items-center gap-3 pl-4 border-l border-gray-100 dark:border-gray-800">
