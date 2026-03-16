@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
 
 type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string }
@@ -50,6 +51,17 @@ export function DashboardPage() {
     const consultantIds = new Set(clientProjects.flatMap((p) => p.consultantIds ?? []))
     return { client, count: consultantIds.size, projects: clientProjects }
   }).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
+
+  // Pie chart data
+  const noContractWithProject = withProject.filter((c) => !c.contractEnd)
+  const pieData = [
+    { name: 'Uten prosjekt', value: withoutProject.length, color: '#ef4444' },
+    { name: 'Utløpt kontrakt', value: expired.length, color: '#f97316' },
+    { name: 'Utløper ≤7 dager', value: withContract.filter((c) => { const d = daysUntil(c.contractEnd!); return d >= 0 && d <= 7 }).length, color: '#fbbf24' },
+    { name: 'Utløper ≤30 dager', value: expiringSoon.filter((c) => daysUntil(c.contractEnd!) > 7).length, color: '#facc15' },
+    { name: 'Aktiv kontrakt', value: activeOk.length, color: '#10b981' },
+    { name: 'Ingen kontrakt', value: noContractWithProject.length, color: '#9ca3af' },
+  ].filter((d) => d.value > 0)
 
   const statCards = [
     {
@@ -112,6 +124,75 @@ export function DashboardPage() {
             <p className="text-xs text-gray-400 dark:text-gray-600">{card.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Pie chart */}
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 transition-colors">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-6">Statusfordeling</h2>
+        {consultants.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-sm text-gray-400 dark:text-gray-600">Ingen data</div>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="w-full md:w-64 h-64 flex-shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="55%"
+                    outerRadius="80%"
+                    paddingAngle={2}
+                    dataKey="value"
+                    strokeWidth={0}
+                  >
+                    {pieData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value) => [`${value} konsulenter`]}
+                    contentStyle={{
+                      backgroundColor: 'var(--tooltip-bg, #fff)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      padding: '8px 12px',
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-col gap-3 flex-1">
+              {pieData.map((entry) => {
+                const pct = Math.round((entry.value / consultants.length) * 100)
+                return (
+                  <div key={entry.name} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{entry.name}</span>
+                        <div className="flex items-center gap-2 ml-2">
+                          <span className="text-xs text-gray-400 dark:text-gray-600">{pct}%</span>
+                          <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums w-5 text-right">{entry.value}</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: entry.color }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                <span className="text-xs text-gray-400 dark:text-gray-600">Totalt</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-white">{consultants.length} konsulenter</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
