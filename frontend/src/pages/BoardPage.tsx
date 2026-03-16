@@ -3,9 +3,12 @@ import { collection, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove } from 
 import { useNavigate } from 'react-router-dom'
 import { db } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
+
+// Drag state: fromProjectId = project they came from (or null), fromClientId = direct client assignment (or null)
+type DragState = { consultantId: string; fromProjectId: string | null; fromClientId: string | null }
 
 const COLORS = [
   { header: 'bg-violet-500', light: 'bg-violet-50 dark:bg-violet-950/40', border: 'border-violet-200 dark:border-violet-800', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300' },
@@ -57,20 +60,21 @@ function ConsultantChip({ consultant, draggable: isDraggable, onDragStart, onCli
   )
 }
 
-function GroupCard({ title, subtitle, color, consultants, isOver, isDraggable, onDragOver, onDragLeave, onDrop, onDragStart, onConsultantClick }: {
+function GroupCard({ title, subtitle, color, consultants, isOver, isDraggable, isAlert: forceAlert, onDragOver, onDragLeave, onDrop, onDragStart, onConsultantClick }: {
   title: string
   subtitle?: string
   color?: typeof COLORS[0]
   consultants: Consultant[]
   isOver: boolean
   isDraggable?: boolean
+  isAlert?: boolean
   onDragOver: (e: React.DragEvent) => void
   onDragLeave: () => void
   onDrop: () => void
   onDragStart: (consultantId: string) => void
   onConsultantClick: (id: string) => void
 }) {
-  const isAlert = !color
+  const isAlert = forceAlert ?? !color
   return (
     <div className={`rounded-2xl border overflow-hidden transition-all ${
       isAlert ? 'border-red-200 dark:border-red-900 bg-red-50/40 dark:bg-red-950/20'
@@ -121,7 +125,7 @@ export function BoardPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [view, setView] = useState<'client' | 'project'>('client')
-  const [dragging, setDragging] = useState<{ consultantId: string; fromProjectId: string | null } | null>(null)
+  const [dragging, setDragging] = useState<DragState | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const navigate = useNavigate()
 
@@ -135,38 +139,80 @@ export function BoardPage() {
   const colorMap: Record<string, number> = {}
   clients.forEach((c, i) => { colorMap[c.id] = i })
 
-  const assignedIds = new Set(projects.flatMap((p) => p.consultantIds ?? []))
-  const unassigned = consultants.filter((c) => !assignedIds.has(c.id))
+  // All consultant IDs assigned to any project
+  const projectAssignedIds = new Set(projects.flatMap((p) => p.consultantIds ?? []))
+
+  // Globally unassigned: no project AND no clientId
+  const globalUnassigned = consultants.filter((c) => !projectAssignedIds.has(c.id) && !c.clientId)
 
   function getProjectConsultants(project: Project) {
     return (project.consultantIds ?? []).map((id) => consultants.find((c) => c.id === id)).filter(Boolean) as Consultant[]
   }
 
+  // Consultants assigned to a client via projects OR directly via clientId
   function getClientConsultants(clientId: string) {
-    const clientProjects = projects.filter((p) => p.clientId === clientId)
-    const ids = new Set(clientProjects.flatMap((p) => p.consultantIds ?? []))
-    return consultants.filter((c) => ids.has(c.id))
+    const viaProjects = new Set(
+      projects.filter((p) => p.clientId === clientId).flatMap((p) => p.consultantIds ?? [])
+    )
+    return consultants.filter((c) => viaProjects.has(c.id) || (c.clientId === clientId && !projectAssignedIds.has(c.id)))
   }
 
-  async function handleDrop(toProjectId: string | null) {
+  // Consultants directly assigned to client but not in any project (for project view)
+  function getClientDirectConsultants(clientId: string) {
+    return consultants.filter((c) => c.clientId === clientId && !projectAssignedIds.has(c.id))
+  }
+
+  // Drop onto a project card
+  async function handleDropOnProject(toProjectId: string) {
     if (!dragging) return
-    const { consultantId, fromProjectId } = dragging
-    setDragging(null)
-    setDragOverId(null)
+    const { consultantId, fromProjectId, fromClientId } = dragging
+    setDragging(null); setDragOverId(null)
     if (fromProjectId === toProjectId) return
-    if (fromProjectId) await updateDoc(doc(db, 'projects', fromProjectId), { consultantIds: arrayRemove(consultantId) })
-    if (toProjectId) await updateDoc(doc(db, 'projects', toProjectId), { consultantIds: arrayUnion(consultantId) })
+    const updates: Promise<void>[] = []
+    if (fromProjectId) updates.push(updateDoc(doc(db, 'projects', fromProjectId), { consultantIds: arrayRemove(consultantId) }))
+    updates.push(updateDoc(doc(db, 'projects', toProjectId), { consultantIds: arrayUnion(consultantId) }))
+    // Clear direct client assignment since they're now in a project
+    if (fromClientId) updates.push(updateDoc(doc(db, 'consultants', consultantId), { clientId: null }))
+    await Promise.all(updates)
   }
 
-  // Sort clients by consultant count descending
+  // Drop onto a client "uten prosjekt" slot — assign to client directly, remove from project
+  async function handleDropOnClient(toClientId: string) {
+    if (!dragging) return
+    const { consultantId, fromProjectId, fromClientId } = dragging
+    setDragging(null); setDragOverId(null)
+    if (fromClientId === toClientId && !fromProjectId) return
+    const updates: Promise<void>[] = []
+    if (fromProjectId) updates.push(updateDoc(doc(db, 'projects', fromProjectId), { consultantIds: arrayRemove(consultantId) }))
+    updates.push(updateDoc(doc(db, 'consultants', consultantId), { clientId: toClientId }))
+    await Promise.all(updates)
+  }
+
+  // Drop onto global "uten prosjekt" — remove all assignments
+  async function handleDropOnUnassigned() {
+    if (!dragging) return
+    const { consultantId, fromProjectId, fromClientId } = dragging
+    setDragging(null); setDragOverId(null)
+    const updates: Promise<void>[] = []
+    if (fromProjectId) updates.push(updateDoc(doc(db, 'projects', fromProjectId), { consultantIds: arrayRemove(consultantId) }))
+    if (fromClientId) updates.push(updateDoc(doc(db, 'consultants', consultantId), { clientId: null }))
+    await Promise.all(updates)
+  }
+
+  // Sort clients by total consultant count descending
   const sortedClients = [...clients].sort((a, b) => getClientConsultants(b.id).length - getClientConsultants(a.id).length)
 
-  // Sort projects by consultant count descending, grouped by client
   function getSortedProjectsForClient(clientId: string) {
     return projects
       .filter((p) => p.clientId === clientId)
       .sort((a, b) => (b.consultantIds?.length ?? 0) - (a.consultantIds?.length ?? 0))
   }
+
+  const dragProps = (fromProjectId: string | null, fromClientId: string | null) => ({
+    isDraggable: true as const,
+    onDragStart: (id: string) => setDragging({ consultantId: id, fromProjectId, fromClientId }),
+    onConsultantClick: (id: string) => navigate(`/consultant/${id}`),
+  })
 
   return (
     <div className="flex flex-col gap-5">
@@ -175,7 +221,7 @@ export function BoardPage() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Board</h1>
           <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">
-            {view === 'project' ? 'Dra konsulenter mellom prosjekter' : 'Oversikt per kunde'}
+            {view === 'project' ? 'Dra konsulenter mellom prosjekter og kunder' : 'Dra konsulenter mellom kunder'}
           </p>
         </div>
         <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
@@ -189,24 +235,24 @@ export function BoardPage() {
       </div>
 
       {view === 'client' ? (
-        // ── CLIENT VIEW: one card per client, sorted by consultant count ──
+        // ── CLIENT VIEW: one droppable card per client ──
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-          {unassigned.length > 0 && (
+          {globalUnassigned.length > 0 && (
             <GroupCard
-              title="Uten prosjekt"
-              consultants={unassigned}
-              isOver={false}
-              isDraggable={false}
-              onDragOver={(e) => e.preventDefault()}
-              onDragLeave={() => {}}
-              onDrop={() => {}}
-              onDragStart={() => {}}
+              title="Uten kunde"
+              consultants={globalUnassigned}
+              isOver={dragOverId === 'unassigned'}
+              isDraggable={true}
+              onDragOver={(e) => { e.preventDefault(); setDragOverId('unassigned') }}
+              onDragLeave={() => setDragOverId(null)}
+              onDrop={handleDropOnUnassigned}
+              onDragStart={(id) => setDragging({ consultantId: id, fromProjectId: null, fromClientId: null })}
               onConsultantClick={(id) => navigate(`/consultant/${id}`)}
             />
           )}
           {sortedClients.map((client) => {
             const cons = getClientConsultants(client.id)
-            if (cons.length === 0) return null
+            if (cons.length === 0 && dragOverId !== `client-${client.id}`) return null
             const color = COLORS[colorMap[client.id] % COLORS.length]
             return (
               <GroupCard
@@ -214,42 +260,47 @@ export function BoardPage() {
                 title={client.name}
                 consultants={cons}
                 color={color}
-                isOver={false}
-                isDraggable={false}
-                onDragOver={(e) => e.preventDefault()}
-                onDragLeave={() => {}}
-                onDrop={() => {}}
-                onDragStart={() => {}}
+                isOver={dragOverId === `client-${client.id}`}
+                isDraggable={true}
+                onDragOver={(e) => { e.preventDefault(); setDragOverId(`client-${client.id}`) }}
+                onDragLeave={() => setDragOverId(null)}
+                onDrop={() => handleDropOnClient(client.id)}
+                onDragStart={(id) => {
+                  // Determine where they're coming from
+                  const c = consultants.find((x) => x.id === id)
+                  const proj = projects.find((p) => p.clientId === client.id && p.consultantIds?.includes(id))
+                  setDragging({ consultantId: id, fromProjectId: proj?.id ?? null, fromClientId: c?.clientId ?? null })
+                }}
                 onConsultantClick={(id) => navigate(`/consultant/${id}`)}
               />
             )
           })}
         </div>
       ) : (
-        // ── PROJECT VIEW: grouped by client, one card per project, drag & drop ──
+        // ── PROJECT VIEW: grouped by client, one card per project + one "uten prosjekt" card per client ──
         <div className="flex flex-col gap-8">
-          {unassigned.length > 0 && (
+          {globalUnassigned.length > 0 && (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
               <GroupCard
-                title="Uten prosjekt"
-                consultants={unassigned}
+                title="Uten kunde"
+                consultants={globalUnassigned}
                 isOver={dragOverId === 'unassigned'}
-                isDraggable={true}
+                {...dragProps(null, null)}
                 onDragOver={(e) => { e.preventDefault(); setDragOverId('unassigned') }}
                 onDragLeave={() => setDragOverId(null)}
-                onDrop={() => handleDrop(null)}
-                onDragStart={(id) => setDragging({ consultantId: id, fromProjectId: null })}
-                onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+                onDrop={handleDropOnUnassigned}
               />
             </div>
           )}
 
           {sortedClients.map((client) => {
             const clientProjects = getSortedProjectsForClient(client.id)
-            if (clientProjects.length === 0) return null
-            const color = COLORS[colorMap[client.id] % COLORS.length]
+            const directCons = getClientDirectConsultants(client.id)
             const totalCons = getClientConsultants(client.id).length
-            if (totalCons === 0) return null
+            const color = COLORS[colorMap[client.id] % COLORS.length]
+
+            // Skip clients with nothing to show (unless being dragged onto)
+            if (totalCons === 0 && clientProjects.length === 0) return null
 
             return (
               <div key={client.id}>
@@ -259,6 +310,7 @@ export function BoardPage() {
                   <span className="text-xs text-gray-400 dark:text-gray-600">{totalCons} konsulenter</span>
                 </div>
                 <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                  {/* Project cards */}
                   {clientProjects.map((project) => (
                     <GroupCard
                       key={project.id}
@@ -266,14 +318,26 @@ export function BoardPage() {
                       color={color}
                       consultants={getProjectConsultants(project)}
                       isOver={dragOverId === project.id}
-                      isDraggable={true}
+                      {...dragProps(project.id, null)}
                       onDragOver={(e) => { e.preventDefault(); setDragOverId(project.id) }}
                       onDragLeave={() => setDragOverId(null)}
-                      onDrop={() => handleDrop(project.id)}
-                      onDragStart={(id) => setDragging({ consultantId: id, fromProjectId: project.id })}
-                      onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+                      onDrop={() => handleDropOnProject(project.id)}
                     />
                   ))}
+
+                  {/* Per-client "Uten prosjekt" card — always shown so you can drop here */}
+                  <GroupCard
+                    title="Uten prosjekt"
+                    subtitle={client.name}
+                    color={color}
+                    isAlert={false}
+                    consultants={directCons}
+                    isOver={dragOverId === `client-${client.id}`}
+                    {...dragProps(null, client.id)}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverId(`client-${client.id}`) }}
+                    onDragLeave={() => setDragOverId(null)}
+                    onDrop={() => handleDropOnClient(client.id)}
+                  />
                 </div>
               </div>
             )
