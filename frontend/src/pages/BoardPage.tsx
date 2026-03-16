@@ -265,34 +265,37 @@ export function BoardPage() {
 
       {view === 'client' ? (
         // ── CLIENT VIEW: drag & drop assigns consultant.clientId ──
-        <div className="grid gap-4 items-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        <div style={{ columns: '280px', gap: '1rem' }}>
           {unassigned.length > 0 && (
-            <GroupCard
-              title="Uten kunde"
-              isAlert
-              consultants={unassigned}
-              isOver={dragOverId === 'unassigned'}
-              isDraggable
-              {...dh('unassigned', { type: 'unassigned' })}
-              onDragStart={(id) => setDragging(id)}
-              onConsultantClick={(id) => navigate(`/consultant/${id}`)}
-            />
+            <div style={{ breakInside: 'avoid', marginBottom: '1rem' }}>
+              <GroupCard
+                title="Uten kunde"
+                isAlert
+                consultants={unassigned}
+                isOver={dragOverId === 'unassigned'}
+                isDraggable
+                {...dh('unassigned', { type: 'unassigned' })}
+                onDragStart={(id) => setDragging(id)}
+                onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+              />
+            </div>
           )}
           {sortedClients.map((client) => {
             const cons = getClientConsultants(client.id)
             const color = COLORS[colorMap[client.id] % COLORS.length]
             return (
-              <GroupCard
-                key={client.id}
-                title={client.name}
-                color={color}
-                consultants={cons}
-                isOver={dragOverId === client.id}
-                isDraggable
-                {...dh(client.id, { type: 'client', clientId: client.id })}
-                onDragStart={(id) => setDragging(id)}
-                onConsultantClick={(id) => navigate(`/consultant/${id}`)}
-              />
+              <div key={client.id} style={{ breakInside: 'avoid', marginBottom: '1rem' }}>
+                <GroupCard
+                  title={client.name}
+                  color={color}
+                  consultants={cons}
+                  isOver={dragOverId === client.id}
+                  isDraggable
+                  {...dh(client.id, { type: 'client', clientId: client.id })}
+                  onDragStart={(id) => setDragging(id)}
+                  onConsultantClick={(id) => navigate(`/consultant/${id}`)}
+                />
+              </div>
             )
           })}
         </div>
