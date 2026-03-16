@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
 import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
@@ -14,7 +15,7 @@ export default function App() {
           path="/"
           element={
             <ProtectedRoute>
-              <ConsultantListPage />
+              <Layout><ConsultantListPage /></Layout>
             </ProtectedRoute>
           }
         />
@@ -22,7 +23,7 @@ export default function App() {
           path="/consultant/:id"
           element={
             <ProtectedRoute>
-              <ConsultantDetailPage />
+              <Layout><ConsultantDetailPage /></Layout>
             </ProtectedRoute>
           }
         />
@@ -30,7 +31,7 @@ export default function App() {
           path="/admins"
           element={
             <ProtectedRoute>
-              <AdminsPage />
+              <Layout><AdminsPage /></Layout>
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase'
 import { NewClientModal } from '../components/NewClientModal'
@@ -20,7 +20,6 @@ type Admin = { id: string; name: string; email: string }
 
 export function ConsultantDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
 
   const [consultant, setConsultant] = useState<Consultant | null>(null)
   const [clients, setClients] = useState<Client[]>([])
@@ -29,7 +28,6 @@ export function ConsultantDetailPage() {
   const [saved, setSaved] = useState(false)
   const [showNewClientModal, setShowNewClientModal] = useState(false)
 
-  // Editable fields
   const [clientId, setClientId] = useState('')
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
@@ -50,7 +48,6 @@ export function ConsultantDetailPage() {
       setNotifyAll(data.notifyAll ?? true)
       setNotifyList(data.notifyList ?? [])
     })
-
     const unsubClients = onSnapshot(collection(db, 'clients'), (snap) => {
       setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Client)))
     })
@@ -84,157 +81,117 @@ export function ConsultantDetailPage() {
 
   if (!consultant) return null
 
+  const inputClass = "border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white focus:border-transparent transition-all w-full"
+  const labelClass = "text-xs font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider"
+
   return (
     <>
-    {showNewClientModal && (
-      <NewClientModal
-        onClose={() => setShowNewClientModal(false)}
-        onCreated={(newId, newName) => {
-          setClients((prev) => [...prev, { id: newId, name: newName }])
-          setClientId(newId)
-          setShowNewClientModal(false)
-        }}
-      />
-    )}
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-xl mx-auto">
-        <button
-          onClick={() => navigate('/')}
-          className="text-sm text-blue-600 hover:underline mb-6 inline-block"
-        >
-          ← Tilbake
-        </button>
+      {showNewClientModal && (
+        <NewClientModal
+          onClose={() => setShowNewClientModal(false)}
+          onCreated={(newId, newName) => {
+            setClients((prev) => [...prev, { id: newId, name: newName }])
+            setClientId(newId)
+            setShowNewClientModal(false)
+          }}
+        />
+      )}
 
-        {/* Read-only header */}
+      <div className="max-w-xl">
         <div className="flex items-center gap-4 mb-8">
           {consultant.photoUrl ? (
-            <img
-              src={consultant.photoUrl}
-              alt={consultant.name}
-              className="w-16 h-16 rounded-full object-cover"
-            />
+            <img src={consultant.photoUrl} alt={consultant.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-white dark:ring-gray-800 shadow-sm" />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xl font-medium">
+            <div className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 text-lg font-semibold">
               {consultant.name?.charAt(0)}
             </div>
           )}
-          <h1 className="text-2xl font-semibold text-gray-800">{consultant.name}</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{consultant.name}</h1>
+            <p className="text-sm text-gray-400 dark:text-gray-500">Rediger kontraktsinformasjon</p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm p-6 flex flex-col gap-5">
-          {/* Kunde */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Kunde</label>
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors duration-200">
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Kunde</label>
             <select
               value={clientId}
               onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  setShowNewClientModal(true)
-                } else {
-                  setClientId(e.target.value)
-                }
+                if (e.target.value === '__new__') setShowNewClientModal(true)
+                else setClientId(e.target.value)
               }}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass}
             >
               <option value="">– Ingen –</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               <option value="__new__">+ Legg til ny kunde…</option>
             </select>
           </div>
 
-          {/* Kontraktstart */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Kontraktstart</label>
-            <input
-              type="date"
-              value={contractStart}
-              onChange={(e) => setContractStart(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelClass}>Kontraktstart</label>
+              <input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} className={inputClass} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelClass}>Kontraktslutt</label>
+              <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} className={inputClass} />
+            </div>
           </div>
 
-          {/* Kontraktslutt */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Kontraktslutt</label>
-            <input
-              type="date"
-              value={contractEnd}
-              onChange={(e) => setContractEnd(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Varslingsdato</label>
+            <input type="date" value={warningDate} onChange={(e) => setWarningDate(e.target.value)} className={inputClass} />
           </div>
 
-          {/* Varslingsdato */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-700">Varslingsdato</label>
-            <input
-              type="date"
-              value={warningDate}
-              onChange={(e) => setWarningDate(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-          {/* Varsle */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-gray-700">Varsle</label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setNotifyAll(true)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  notifyAll
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Varsle alle
-              </button>
-              <button
-                type="button"
-                onClick={() => setNotifyAll(false)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                  !notifyAll
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Velg spesifikke
-              </button>
+          <div className="flex flex-col gap-2.5">
+            <label className={labelClass}>Varsle</label>
+            <div className="flex gap-2">
+              {[true, false].map((val) => (
+                <button
+                  key={String(val)}
+                  type="button"
+                  onClick={() => setNotifyAll(val)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${
+                    notifyAll === val
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                      : 'bg-white dark:bg-transparent text-gray-500 dark:text-gray-500 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+                  }`}
+                >
+                  {val ? 'Varsle alle' : 'Velg spesifikke'}
+                </button>
+              ))}
             </div>
             {!notifyAll && (
-              <div className="flex flex-col gap-1 mt-1">
+              <div className="flex flex-col gap-2 mt-1 pl-1">
                 {admins.map((a) => (
-                  <label key={a.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={notifyList.includes(a.id)}
-                      onChange={() => toggleNotifyAdmin(a.id)}
-                      className="rounded"
-                    />
-                    {a.name} <span className="text-gray-400">({a.email})</span>
+                  <label key={a.id} className="flex items-center gap-2.5 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" checked={notifyList.includes(a.id)} onChange={() => toggleNotifyAdmin(a.id)} className="rounded accent-gray-900 dark:accent-white" />
+                    <span>{a.name}</span>
+                    <span className="text-gray-400 dark:text-gray-600 text-xs">{a.email}</span>
                   </label>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Lagre */}
-          <div className="flex items-center gap-3 pt-2">
+          <div className="h-px bg-gray-100 dark:bg-gray-800" />
+
+          <div className="flex items-center gap-3">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+              className="bg-gray-900 dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-100 disabled:opacity-40 text-white dark:text-gray-900 text-sm font-medium px-5 py-2.5 rounded-xl transition-colors"
             >
-              {saving ? 'Lagrer…' : 'Lagre'}
+              {saving ? 'Lagrer…' : 'Lagre endringer'}
             </button>
-            {saved && <span className="text-sm text-green-600">Lagret!</span>}
+            {saved && <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Lagret!</span>}
           </div>
         </div>
       </div>
-    </div>
     </>
   )
 }
