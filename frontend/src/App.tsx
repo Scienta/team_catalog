@@ -3,6 +3,7 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { LoginPage } from './pages/LoginPage'
 import { ConsultantListPage } from './pages/ConsultantListPage'
 import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
+import { AdminsPage } from './pages/AdminsPage'
 
 export default function App() {
   return (
@@ -22,6 +23,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ConsultantDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admins"
+          element={
+            <ProtectedRoute>
+              <AdminsPage />
             </ProtectedRoute>
           }
         />

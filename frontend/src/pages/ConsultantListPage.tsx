@@ -82,6 +82,12 @@ export function ConsultantListPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-gray-800">Konsulenter</h1>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/admins')}
+              className="text-sm text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              Administratorer
+            </button>
             {syncMsg && <span className="text-sm text-gray-600">{syncMsg}</span>}
             <button
               onClick={handleSync}

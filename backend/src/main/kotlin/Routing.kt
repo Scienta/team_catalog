@@ -1,8 +1,11 @@
 package com.scienta
 
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserRecord
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
@@ -15,6 +18,12 @@ data class SyncResponse(val synced: Int)
 
 @Serializable
 data class CheckContractsResponse(val notified: Int)
+
+@Serializable
+data class LookupUserRequest(val email: String)
+
+@Serializable
+data class LookupUserResponse(val uid: String, val name: String, val email: String)
 
 fun Application.configureRouting(config: AppConfig) {
     install(StatusPages) {
@@ -59,6 +68,28 @@ fun Application.configureRouting(config: AppConfig) {
             }
 
             call.respond(SyncResponse(activeUsers.size))
+        }
+
+        post("/admin/lookup-user") {
+            call.authenticateFirebase() ?: return@post
+
+            val body = call.receive<LookupUserRequest>()
+            val user: UserRecord? = try {
+                FirebaseAuth.getInstance().getUserByEmail(body.email)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (user == null) {
+                call.respond(HttpStatusCode.NotFound, "User not found")
+                return@post
+            }
+
+            call.respond(LookupUserResponse(
+                uid = user.uid,
+                name = user.displayName ?: "",
+                email = user.email ?: body.email
+            ))
         }
 
         post("/check-contracts") {
