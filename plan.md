@@ -94,9 +94,9 @@ Scienta_team_catalog/
 - [x] Returner `{ "notified": N }`
 
 ### 2.7 Lokal testing
-- [ ] Test `/health` lokalt med `curl`
+- [x] Test `/health` lokalt med `curl`
 - [ ] Test `/sync` med en test-Firebase-token
-- [ ] Test `/check-contracts` med riktig `SCHEDULER_SECRET`
+- [x] Test `/check-contracts` med riktig `SCHEDULER_SECRET`
 
 ---
 
