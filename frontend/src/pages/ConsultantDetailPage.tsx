@@ -168,8 +168,8 @@ export function ConsultantDetailPage() {
       setSykemeldtPerioder(rawSyke ?? ((data as any).sykemeldt ? [{ fra: (data as any).sykemeldtFra ?? today, til: (data as any).sykemeldtTil ?? null }] : []))
       setPermittertPerioder(rawPerm ?? ((data as any).permittert ? [{ fra: (data as any).permittertFra ?? today, til: (data as any).permittertTil ?? null }] : []))
 
-      setContractStart(data.contractStart ?? '')
-      setContractEnd(data.contractEnd ?? '')
+      setContractStart(data.contractStart ?? '2026-01-01')
+      setContractEnd(data.contractEnd ?? '2026-12-31')
       setWarningDays(data.warningDays ?? '')
       setNotifyAll(data.notifyAll ?? true)
       setNotifyList(data.notifyList ?? [])
