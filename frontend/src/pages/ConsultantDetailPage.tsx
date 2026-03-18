@@ -49,9 +49,16 @@ function fmtShortDate(dateStr: string): string {
 }
 
 function absenceDurationLabel(p: AbsencePeriod): string {
-  const from = new Date(p.fra)
-  const to = p.til ? new Date(p.til) : new Date()
-  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000) + 1)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const toStr = p.til ?? todayStr
+  // Use local-midnight parsing to avoid UTC offset issues
+  const from = new Date(p.fra + 'T00:00:00')
+  const to = new Date(toStr + 'T00:00:00')
+  // Inclusive days for completed periods; elapsed days for ongoing (0 = started today)
+  const days = p.til
+    ? Math.round((to.getTime() - from.getTime()) / 86400000) + 1
+    : Math.round((to.getTime() - from.getTime()) / 86400000)
+  if (days === 0) return 'i dag'
   if (days < 7) return `${days}d`
   const weeks = Math.floor(days / 7)
   if (weeks < 9) return `${weeks}u`
@@ -112,7 +119,7 @@ function AddAbsencePeriodForm({ onAdd, color }: { onAdd: (fra: string, til: stri
           <input type="date" value={fra} onChange={(e) => setFra(e.target.value)} className={inputCls} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Til (tom = pågående)</label>
+          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Til <span className="normal-case font-normal opacity-60">(valgfritt)</span></label>
           <input type="date" value={til} onChange={(e) => setTil(e.target.value)} className={inputCls} />
         </div>
       </div>
@@ -337,7 +344,7 @@ export function ConsultantDetailPage() {
                             <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
                             <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
                             <span className={ongoing ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
-                            <span className="text-xs text-gray-400 dark:text-gray-600 ml-2">{absenceDurationLabel(p)}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-600"> · {absenceDurationLabel(p)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {ongoing && (
@@ -389,7 +396,7 @@ export function ConsultantDetailPage() {
                             <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
                             <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
                             <span className={ongoing ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
-                            <span className="text-xs text-gray-400 dark:text-gray-600 ml-2">{absenceDurationLabel(p)}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-600"> · {absenceDurationLabel(p)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {ongoing && (
