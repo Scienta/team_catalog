@@ -1,7 +1,30 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore'
+import { doc, getDoc, getDocs, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
+
+type AbsencePeriod = { fra: string; til: string | null }
+
+async function startLedigIfNoProject(consultantId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const remaining = await getDocs(query(collection(db, 'projects'), where('consultantIds', 'array-contains', consultantId)))
+  if (!remaining.empty) return
+  const snap = await getDoc(doc(db, 'consultants', consultantId))
+  if (!snap.exists()) return
+  const existing = (snap.data()?.ledigPerioder ?? []) as AbsencePeriod[]
+  if (existing.some(p => p.til === null)) return
+  await updateDoc(doc(db, 'consultants', consultantId), { ledigPerioder: [...existing, { fra: today, til: null }] })
+}
+
+async function closeLedigPeriod(consultantId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const snap = await getDoc(doc(db, 'consultants', consultantId))
+  if (!snap.exists()) return
+  const existing = (snap.data()?.ledigPerioder ?? []) as AbsencePeriod[]
+  if (!existing.some(p => p.til === null)) return
+  const updated = existing.map(p => p.til === null ? { ...p, til: today } : p)
+  await updateDoc(doc(db, 'consultants', consultantId), { ledigPerioder: updated })
+}
 
 type Client = {
   name: string
@@ -104,7 +127,10 @@ export function ClientDetailPage() {
   }
 
   async function handleDeleteProject(projectId: string) {
+    const projectSnap = await getDoc(doc(db, 'projects', projectId))
+    const consultantIds: string[] = (projectSnap.data()?.consultantIds ?? []) as string[]
     await deleteDoc(doc(db, 'projects', projectId))
+    await Promise.all(consultantIds.map(startLedigIfNoProject))
   }
 
   async function handleDropOnProject(targetProjectId: string) {
@@ -118,6 +144,7 @@ export function ClientDetailPage() {
     }
     batch.update(doc(db, 'projects', targetProjectId), { consultantIds: arrayUnion(draggingConsultant.id) })
     await batch.commit()
+    await closeLedigPeriod(draggingConsultant.id)
   }
 
   if (!client) return null
@@ -261,10 +288,12 @@ function ProjectCard({ project, allConsultants, onDelete, isDropTarget, onConsul
 
   async function handleAddConsultant(consultantId: string) {
     await updateDoc(doc(db, 'projects', project.id), { consultantIds: arrayUnion(consultantId) })
+    await closeLedigPeriod(consultantId)
   }
 
   async function handleRemoveConsultant(consultantId: string) {
     await updateDoc(doc(db, 'projects', project.id), { consultantIds: arrayRemove(consultantId) })
+    await startLedigIfNoProject(consultantId)
   }
 
   return (

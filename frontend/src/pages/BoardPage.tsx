@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { collection, onSnapshot, doc, deleteField, addDoc, getDocs, query, where, writeBatch } from 'firebase/firestore'
+import { collection, onSnapshot, doc, getDoc, updateDoc, deleteField, addDoc, getDocs, query, where, writeBatch } from 'firebase/firestore'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../firebase'
 import { writeAuditLog } from '../lib/auditLog'
@@ -14,6 +14,17 @@ function isActiveNow(periods: AbsencePeriod[]): boolean {
 type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string; logoUrl?: string; contactPhotoUrl?: string; contactName?: string; slackChannel?: string }
+
+async function startLedigIfNoProject(consultantId: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const remaining = await getDocs(query(collection(db, 'projects'), where('consultantIds', 'array-contains', consultantId)))
+  if (!remaining.empty) return
+  const snap = await getDoc(doc(db, 'consultants', consultantId))
+  if (!snap.exists()) return
+  const existing = (snap.data()?.ledigPerioder ?? []) as AbsencePeriod[]
+  if (existing.some(p => p.til === null)) return
+  await updateDoc(doc(db, 'consultants', consultantId), { ledigPerioder: [...existing, { fra: today, til: null }] })
+}
 
 function daysUntil(dateStr: string) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -152,11 +163,13 @@ export function BoardPage() {
     try {
       const batch = writeBatch(db)
       const projectSnap = await getDocs(query(collection(db, 'projects'), where('clientId', '==', client.id)))
+      const affectedConsultantIds = [...new Set(projectSnap.docs.flatMap(d => (d.data().consultantIds ?? []) as string[]))]
       projectSnap.docs.forEach((d) => batch.delete(d.ref))
       const consultantSnap = await getDocs(query(collection(db, 'consultants'), where('clientId', '==', client.id)))
       consultantSnap.docs.forEach((d) => batch.update(d.ref, { clientId: deleteField() }))
       batch.delete(doc(db, 'clients', client.id))
       await batch.commit()
+      await Promise.all(affectedConsultantIds.map(startLedigIfNoProject))
       await writeAuditLog('DELETE_CLIENT', 'client', client.id, { name: client.name })
       setConfirmDeleteClient(null)
     } catch (e) {

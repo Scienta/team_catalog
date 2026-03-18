@@ -11,9 +11,18 @@ function isActiveNow(periods: AbsencePeriod[]): boolean {
   return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
 }
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; clientId?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; ledigPerioder?: AbsencePeriod[]; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
+
+function ledigDays(periods: AbsencePeriod[]): number | null {
+  const today = new Date().toISOString().split('T')[0]
+  const active = periods.find(p => p.fra <= today && p.til === null)
+  if (!active) return null
+  const from = new Date(active.fra + 'T00:00:00')
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  return Math.round((now.getTime() - from.getTime()) / 86400000)
+}
 
 function daysUntil(dateStr: string): number {
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -287,20 +296,30 @@ export function DashboardPage() {
                   Alle konsulenter er på prosjekt ✓
                 </div>
               ) : (
-                withoutProject.map((c, i) => (
-                  <div
-                    key={c.id}
-                    onClick={() => navigate(`/consultant/${c.id}`)}
-                    className={`flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-red-50/60 dark:hover:bg-red-950/20 transition-colors ${i > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
-                  >
-                    {c.photoUrl ? (
-                      <img src={c.photoUrl} alt={c.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-red-600 dark:text-red-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
-                    )}
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
-                  </div>
-                ))
+                withoutProject.map((c, i) => {
+                  const days = ledigDays(c.ledigPerioder ?? [])
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => navigate(`/consultant/${c.id}`)}
+                      className={`flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-red-50/60 dark:hover:bg-red-950/20 transition-colors ${i > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {c.photoUrl ? (
+                          <img src={c.photoUrl} alt={c.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-red-600 dark:text-red-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                        )}
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                      </div>
+                      {days !== null && (
+                        <span className="text-xs font-medium text-red-500 dark:text-red-400 tabular-nums">
+                          {days === 0 ? 'Ledig i dag' : `Ledig i ${days}d`}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>

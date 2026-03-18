@@ -14,6 +14,7 @@ type Consultant = {
   isInternal?: boolean
   sykemeldtPerioder?: AbsencePeriod[]
   permittertPerioder?: AbsencePeriod[]
+  ledigPerioder?: AbsencePeriod[]
   contractStart?: string
   contractEnd?: string
   warningDays?: number
@@ -40,6 +41,11 @@ type CVData = {
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']
 
 function isActiveNow(periods: AbsencePeriod[]): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
+}
+
+function isLedigNow(periods: AbsencePeriod[]): boolean {
   const today = new Date().toISOString().split('T')[0]
   return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
 }
@@ -87,24 +93,24 @@ function PeriodBadge({ yFrom, mFrom, yTo, mTo }: { yFrom?: number; mFrom?: numbe
   return <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">{label}</span>
 }
 
-function AddAbsencePeriodForm({ onAdd, color }: { onAdd: (fra: string, til: string | null) => void; color: 'amber' | 'blue' }) {
+function AddAbsencePeriodForm({ onAdd, color }: { onAdd: (fra: string, til: string | null) => void; color: 'amber' | 'blue' | 'green' }) {
   const today = new Date().toISOString().split('T')[0]
   const [open, setOpen] = useState(false)
   const [fra, setFra] = useState(today)
   const [til, setTil] = useState('')
 
   const inputCls = `border rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 w-full ${
-    color === 'amber' ? 'border-amber-200 dark:border-amber-800 focus:ring-amber-400' : 'border-blue-200 dark:border-blue-800 focus:ring-blue-400'
+    color === 'amber' ? 'border-amber-200 dark:border-amber-800 focus:ring-amber-400' : color === 'blue' ? 'border-blue-200 dark:border-blue-800 focus:ring-blue-400' : 'border-emerald-200 dark:border-emerald-800 focus:ring-emerald-400'
   }`
   const btnCls = `text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
-    color === 'amber' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+    color === 'amber' ? 'bg-amber-500 hover:bg-amber-600 text-white' : color === 'blue' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'
   }`
 
   if (!open) return (
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className={`text-xs font-medium flex items-center gap-1.5 transition-colors ${color === 'amber' ? 'text-amber-700 dark:text-amber-400 hover:text-amber-900' : 'text-blue-700 dark:text-blue-400 hover:text-blue-900'}`}
+      className={`text-xs font-medium flex items-center gap-1.5 transition-colors ${color === 'amber' ? 'text-amber-700 dark:text-amber-400 hover:text-amber-900' : color === 'blue' ? 'text-blue-700 dark:text-blue-400 hover:text-blue-900' : 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-900'}`}
     >
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Legg til periode
@@ -115,11 +121,11 @@ function AddAbsencePeriodForm({ onAdd, color }: { onAdd: (fra: string, til: stri
     <div className="flex flex-col gap-2 pt-1">
       <div className="grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-1">
-          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Fra</label>
+          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : color === 'blue' ? 'text-blue-700 dark:text-blue-400' : 'text-emerald-700 dark:text-emerald-400'}`}>Fra</label>
           <input type="date" value={fra} onChange={(e) => setFra(e.target.value)} className={inputCls} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Til <span className="normal-case font-normal opacity-60">(valgfritt)</span></label>
+          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : color === 'blue' ? 'text-blue-700 dark:text-blue-400' : 'text-emerald-700 dark:text-emerald-400'}`}>Til <span className="normal-case font-normal opacity-60">(valgfritt)</span></label>
           <input type="date" value={til} onChange={(e) => setTil(e.target.value)} className={inputCls} />
         </div>
       </div>
@@ -148,6 +154,7 @@ export function ConsultantDetailPage() {
   const [isInternal, setIsInternal] = useState(false)
   const [sykemeldtPerioder, setSykemeldtPerioder] = useState<AbsencePeriod[]>([])
   const [permittertPerioder, setPermittertPerioder] = useState<AbsencePeriod[]>([])
+  const [ledigPerioder, setLedigPerioder] = useState<AbsencePeriod[]>([])
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDays, setWarningDays] = useState<number | ''>('')
@@ -167,6 +174,7 @@ export function ConsultantDetailPage() {
       const rawPerm = (data as any).permittertPerioder as AbsencePeriod[] | undefined
       setSykemeldtPerioder(rawSyke ?? ((data as any).sykemeldt ? [{ fra: (data as any).sykemeldtFra ?? today, til: (data as any).sykemeldtTil ?? null }] : []))
       setPermittertPerioder(rawPerm ?? ((data as any).permittert ? [{ fra: (data as any).permittertFra ?? today, til: (data as any).permittertTil ?? null }] : []))
+      setLedigPerioder((data as any).ledigPerioder ?? [])
 
       setContractStart(data.contractStart ?? '2026-01-01')
       setContractEnd(data.contractEnd ?? '2026-12-31')
@@ -237,6 +245,28 @@ export function ConsultantDetailPage() {
     await updateDoc(doc(db, 'consultants', id), { [key]: updated })
     if (type === 'sykemeldt') setSykemeldtPerioder(updated)
     else setPermittertPerioder(updated)
+  }
+
+  async function addLedigPeriod(fra: string, til: string | null) {
+    if (!id || !fra) return
+    const updated = [...ledigPerioder, { fra, til }].sort((a, b) => b.fra.localeCompare(a.fra))
+    await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
+    setLedigPerioder(updated)
+  }
+
+  async function removeLedigPeriod(index: number) {
+    if (!id) return
+    const updated = ledigPerioder.filter((_, i) => i !== index)
+    await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
+    setLedigPerioder(updated)
+  }
+
+  async function endLedigPeriod(index: number) {
+    if (!id) return
+    const today = new Date().toISOString().split('T')[0]
+    const updated = ledigPerioder.map((p, i) => i === index ? { ...p, til: today } : p)
+    await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
+    setLedigPerioder(updated)
   }
 
   function toggleNotifyAdmin(uid: string) {
@@ -417,6 +447,58 @@ export function ConsultantDetailPage() {
                 )}
 
                 <AddAbsencePeriodForm onAdd={(fra, til) => addAbsencePeriod('permittert', fra, til)} color="blue" />
+              </div>
+            )
+          })()}
+
+          {/* Ledigperioder */}
+          {(() => {
+            const isActive = isLedigNow(ledigPerioder)
+            return (
+              <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ledigperioder</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                      {isActive ? 'Aktiv nå' : ledigPerioder.length > 0 ? `${ledigPerioder.length} historiske periode${ledigPerioder.length !== 1 ? 'r' : ''}` : 'Ingen registrerte perioder'}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <span className="text-xs font-semibold bg-emerald-200 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full flex-shrink-0">Ledig</span>
+                  )}
+                </div>
+
+                {ledigPerioder.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t border-emerald-100 dark:border-emerald-900/40 pt-3">
+                    {ledigPerioder.map((p, i) => {
+                      const ongoing = p.til === null
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
+                            <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
+                            <span className={ongoing ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-600"> · {absenceDurationLabel(p)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {ongoing && (
+                              <button type="button" onClick={() => endLedigPeriod(i)}
+                                className="text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 font-medium transition-colors">
+                                Avslutt i dag
+                              </button>
+                            )}
+                            <button type="button" onClick={() => removeLedigPeriod(i)}
+                              className="w-5 h-5 rounded flex items-center justify-center text-gray-300 dark:text-gray-700 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <AddAbsencePeriodForm onAdd={(fra, til) => addLedigPeriod(fra, til)} color="green" />
               </div>
             )
           })()}
