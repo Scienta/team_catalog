@@ -3,6 +3,7 @@ import { collection, onSnapshot } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
+import { computeYearStats, WORK_DAYS_PER_YEAR } from '../lib/absenceStats'
 
 type AbsencePeriod = { fra: string; til: string | null }
 
@@ -45,6 +46,7 @@ export function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const navigate = useNavigate()
+  const currentYear = new Date().getFullYear()
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'consultants'), (s) => setConsultants(s.docs.map((d) => ({ id: d.id, ...d.data() } as Consultant))))
@@ -79,6 +81,22 @@ export function DashboardPage() {
     const count = projectConsultantIds.size + directCount
     return { client, count, projects: clientProjects }
   }).filter((x) => x.count > 0).sort((a, b) => b.count - a.count)
+
+  // Absence stats for current year — all external consultants
+  const consultantAbsenceStats = externalConsultants.map(c => {
+    const stats = computeYearStats(
+      c.sykemeldtPerioder ?? [],
+      c.permittertPerioder ?? [],
+      c.ledigPerioder ?? [],
+      currentYear
+    )
+    return { consultant: c, stats }
+  }).filter(x => x.stats.total > 0).sort((a, b) => b.stats.total - a.stats.total)
+
+  const totalAbsenceDaysThisYear = consultantAbsenceStats.reduce((sum, x) => sum + x.stats.total, 0)
+  const avgAbsencePct = externalConsultants.length > 0
+    ? Math.round((totalAbsenceDaysThisYear / (externalConsultants.length * WORK_DAYS_PER_YEAR)) * 100)
+    : 0
 
   // Pie chart data
   const noContractWithProject = withProject.filter((c) => !c.contractEnd)
@@ -140,6 +158,13 @@ export function DashboardPage() {
       sub: permitterte.length === 0 ? 'Ingen permitterte' : permitterte.length === 1 ? '1 konsulent' : `${permitterte.length} konsulenter`,
       color: permitterte.length > 0 ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-[#1a1a1a]',
       valueColor: permitterte.length > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white',
+    },
+    {
+      label: `Fravær i år`,
+      value: totalAbsenceDaysThisYear,
+      sub: totalAbsenceDaysThisYear > 0 ? `Snitt ${avgAbsencePct}% av ${WORK_DAYS_PER_YEAR}d` : 'Ingen registrert fravær',
+      color: totalAbsenceDaysThisYear > 0 ? 'bg-white dark:bg-[#1a1a1a]' : 'bg-white dark:bg-[#1a1a1a]',
+      valueColor: 'text-gray-900 dark:text-white',
     },
     {
       label: 'Kunder',
@@ -319,7 +344,7 @@ export function DashboardPage() {
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
                       </div>
                       <span className="text-xs font-medium text-red-500 dark:text-red-400 tabular-nums">
-                        {`Ledig i ${days}d`}
+                        {days === 0 ? 'Ledig' : `Ledig i ${days}d`}
                       </span>
                     </div>
                   )
@@ -434,6 +459,57 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Fraværsstatistikk ranked list */}
+      {consultantAbsenceStats.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+            Fraværsstatistikk {currentYear}
+            <span className="text-xs font-medium text-gray-400 dark:text-gray-600 normal-case tracking-normal">{consultantAbsenceStats.length} med registrert fravær</span>
+          </h2>
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+            {/* Summary bar */}
+            <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/60 dark:bg-gray-800/20">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Totalt {totalAbsenceDaysThisYear} fraværsdager i {currentYear}</span>
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Snitt {avgAbsencePct}% av {WORK_DAYS_PER_YEAR}d per konsulent</span>
+            </div>
+            {/* Header row */}
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 px-5 py-2 border-b border-gray-100 dark:border-gray-800">
+              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Konsulent</span>
+              <span className="text-[10px] font-medium text-amber-500 dark:text-amber-600 uppercase tracking-wider w-10 text-right">Syke</span>
+              <span className="text-[10px] font-medium text-blue-500 dark:text-blue-600 uppercase tracking-wider w-10 text-right">Perm</span>
+              <span className="text-[10px] font-medium text-red-400 dark:text-red-600 uppercase tracking-wider w-14 text-right">U.prosj</span>
+              <span className="text-[10px] font-medium text-gray-500 dark:text-gray-500 uppercase tracking-wider w-12 text-right">Total</span>
+            </div>
+            {consultantAbsenceStats.map(({ consultant: c, stats }, i) => {
+              const pct = Math.round((stats.total / WORK_DAYS_PER_YEAR) * 100)
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => navigate(`/consultant/${c.id}`)}
+                  className={`grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 items-center px-5 py-3 cursor-pointer hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors ${i > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {c.photoUrl ? (
+                      <img src={c.photoUrl} alt={c.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                    )}
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{c.name}</span>
+                  </div>
+                  <span className="text-xs tabular-nums text-right w-10 text-amber-600 dark:text-amber-400">{stats.syke > 0 ? `${stats.syke}d` : '—'}</span>
+                  <span className="text-xs tabular-nums text-right w-10 text-blue-600 dark:text-blue-400">{stats.perm > 0 ? `${stats.perm}d` : '—'}</span>
+                  <span className="text-xs tabular-nums text-right w-14 text-red-500 dark:text-red-400">{stats.ledig > 0 ? `${stats.ledig}d` : '—'}</span>
+                  <div className="flex flex-col items-end w-12">
+                    <span className="text-xs font-bold tabular-nums text-gray-900 dark:text-white">{stats.total}d</span>
+                    <span className={`text-[10px] tabular-nums ${pct >= 20 ? 'text-red-500' : pct >= 10 ? 'text-amber-500' : 'text-gray-400'}`}>{pct}%</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

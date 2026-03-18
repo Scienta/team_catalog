@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore'
 import { getIdToken } from 'firebase/auth'
 import { db, auth } from '../firebase'
+import { computeYearStats, availableYears, WORK_DAYS_PER_YEAR } from '../lib/absenceStats'
 
 type AbsencePeriod = { fra: string; til: string | null }
 
@@ -66,41 +67,6 @@ function absenceDurationLabel(p: AbsencePeriod): string {
   const weeks = Math.floor(days / 7)
   if (weeks < 9) return `${weeks}u`
   return `${Math.round(days / 30)} mnd`
-}
-
-function sumPeriodDays(periods: AbsencePeriod[]): number {
-  const today = new Date().toISOString().split('T')[0]
-  return periods.reduce((sum, p) => {
-    const fra = new Date(p.fra + 'T00:00:00')
-    const til = new Date((p.til ?? today) + 'T00:00:00')
-    return sum + Math.max(1, Math.round((til.getTime() - fra.getTime()) / 86400000) + 1)
-  }, 0)
-}
-
-function totalLedigUnionDays(
-  ledigPerioder: AbsencePeriod[],
-  sykemeldtPerioder: AbsencePeriod[],
-  permittertPerioder: AbsencePeriod[]
-): number {
-  const today = new Date().toISOString().split('T')[0]
-  const all = [...ledigPerioder, ...sykemeldtPerioder, ...permittertPerioder]
-    .map(p => ({ fra: p.fra, til: p.til ?? today }))
-    .filter(p => p.fra <= today)
-    .sort((a, b) => a.fra.localeCompare(b.fra))
-
-  const merged: { fra: string; til: string }[] = []
-  for (const p of all) {
-    if (merged.length === 0 || p.fra > merged[merged.length - 1].til) {
-      merged.push({ ...p })
-    } else if (p.til > merged[merged.length - 1].til) {
-      merged[merged.length - 1].til = p.til
-    }
-  }
-  return merged.reduce((sum, p) => {
-    const fra = new Date(p.fra + 'T00:00:00')
-    const til = new Date(p.til + 'T00:00:00')
-    return sum + Math.max(1, Math.round((til.getTime() - fra.getTime()) / 86400000) + 1)
-  }, 0)
 }
 
 function formatDays(days: number): string {
@@ -195,6 +161,7 @@ export function ConsultantDetailPage() {
   const [sykemeldtPerioder, setSykemeldtPerioder] = useState<AbsencePeriod[]>([])
   const [permittertPerioder, setPermittertPerioder] = useState<AbsencePeriod[]>([])
   const [ledigPerioder, setLedigPerioder] = useState<AbsencePeriod[]>([])
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDays, setWarningDays] = useState<number | ''>('')
@@ -298,6 +265,13 @@ export function ConsultantDetailPage() {
     if (!id) return
     const today = new Date().toISOString().split('T')[0]
     const updated = ledigPerioder.map((p, i) => i === index ? { ...p, til: today } : p)
+    await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
+    setLedigPerioder(updated)
+  }
+
+  async function addLedigPeriod(fra: string, til: string | null) {
+    if (!id || !fra) return
+    const updated = [...ledigPerioder, { fra, til }].sort((a, b) => b.fra.localeCompare(a.fra))
     await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
     setLedigPerioder(updated)
   }
@@ -484,52 +458,120 @@ export function ConsultantDetailPage() {
             )
           })()}
 
-          {/* Ledigstatistikk — beregnet */}
+          {/* Fraværsstatistikk */}
           {!isInternal && (() => {
-            const utenProsjektDager = sumPeriodDays(ledigPerioder)
-            const sykeDager = sumPeriodDays(sykemeldtPerioder)
-            const permDager = sumPeriodDays(permittertPerioder)
-            const totalDager = totalLedigUnionDays(ledigPerioder, sykemeldtPerioder, permittertPerioder)
+            const years = availableYears(sykemeldtPerioder, permittertPerioder, ledigPerioder)
+            const stats = computeYearStats(sykemeldtPerioder, permittertPerioder, ledigPerioder, selectedYear)
+            const pct = stats.total > 0 ? Math.round((stats.total / WORK_DAYS_PER_YEAR) * 100) : 0
+            const harPerioder = sykemeldtPerioder.length > 0 || permittertPerioder.length > 0 || ledigPerioder.length > 0
             const isLedigNå = isLedigNow(ledigPerioder)
             const isSykeNå = isActiveNow(sykemeldtPerioder)
             const isPermNå = isActiveNow(permittertPerioder)
-            const harData = ledigPerioder.length > 0 || sykemeldtPerioder.length > 0 || permittertPerioder.length > 0
 
             return (
-              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ikke-billable tid</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Beregnet fra sykemelding, permisjon og perioder uten prosjekt</p>
-                  </div>
-                  {harData && (
-                    <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums flex-shrink-0">{formatDays(totalDager)}</span>
-                  )}
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-5 py-4 flex flex-col gap-4 transition-colors">
+                {/* Header */}
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Fraværsstatistikk</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Sykemelding · Permisjon · Uten prosjekt</p>
                 </div>
 
-                {harData ? (
-                  <div className="grid grid-cols-3 gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
-                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isLedigNå ? 'bg-red-50 dark:bg-red-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
-                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Uten prosjekt</span>
-                      <span className={`text-lg font-bold tabular-nums ${isLedigNå ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(utenProsjektDager)}</span>
-                    </div>
-                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isSykeNå ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
-                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Sykemeldt</span>
-                      <span className={`text-lg font-bold tabular-nums ${isSykeNå ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(sykeDager)}</span>
-                    </div>
-                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isPermNå ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
-                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Permittert</span>
-                      <span className={`text-lg font-bold tabular-nums ${isPermNå ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(permDager)}</span>
+                {/* Year selector */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {years.map(y => (
+                    <button key={y} type="button" onClick={() => setSelectedYear(y)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                        selectedYear === y
+                          ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
+                          : 'text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400'
+                      }`}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Year summary grid */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isLedigNå ? 'bg-red-50 dark:bg-red-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Uten prosjekt</span>
+                    <span className={`text-lg font-bold tabular-nums ${isLedigNå ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(stats.ledig)}</span>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isSykeNå ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Sykemeldt</span>
+                    <span className={`text-lg font-bold tabular-nums ${isSykeNå ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(stats.syke)}</span>
+                  </div>
+                  <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isPermNå ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                    <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Permittert</span>
+                    <span className={`text-lg font-bold tabular-nums ${isPermNå ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(stats.perm)}</span>
+                  </div>
+                </div>
+
+                {/* Total + % */}
+                {stats.total > 0 && (
+                  <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800/40 rounded-xl px-3 py-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Totalt fravær {selectedYear}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{stats.total}d</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-md tabular-nums ${pct >= 20 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : pct >= 10 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                        {pct}% av {WORK_DAYS_PER_YEAR}d
+                      </span>
                     </div>
                   </div>
-                ) : (
-                  <p className="text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-800 pt-3">Ingen registrert ikke-billable tid</p>
                 )}
 
-                {ledigPerioder.length > 0 && (
-                  <div className="flex flex-col gap-1.5 border-t border-gray-100 dark:border-gray-800 pt-3">
-                    <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Perioder uten prosjekt (auto-registrert)</p>
-                    {ledigPerioder.map((p, i) => {
+                {/* Monthly breakdown table */}
+                {harPerioder && (
+                  <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-400 dark:text-gray-600">
+                            <th className="text-left font-medium pb-2 pr-3">Måned</th>
+                            <th className="text-right font-medium pb-2 px-2">Syke</th>
+                            <th className="text-right font-medium pb-2 px-2">Perm</th>
+                            <th className="text-right font-medium pb-2 px-2">U.prosj</th>
+                            <th className="text-right font-medium pb-2 pl-2">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.months.map((m, i) => (
+                            <tr key={i} className={`border-t border-gray-50 dark:border-gray-800/60 ${m.total > 0 ? 'text-gray-800 dark:text-gray-200' : 'text-gray-300 dark:text-gray-700'}`}>
+                              <td className="py-1.5 pr-3 font-medium">{m.name}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums ${m.syke > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`}>{m.syke > 0 ? `${m.syke}d` : '—'}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums ${m.perm > 0 ? 'text-blue-600 dark:text-blue-400' : ''}`}>{m.perm > 0 ? `${m.perm}d` : '—'}</td>
+                              <td className={`py-1.5 px-2 text-right tabular-nums ${m.ledig > 0 ? 'text-red-500 dark:text-red-400' : ''}`}>{m.ledig > 0 ? `${m.ledig}d` : '—'}</td>
+                              <td className={`py-1.5 pl-2 text-right font-semibold tabular-nums ${m.total > 0 ? 'text-gray-900 dark:text-white' : ''}`}>{m.total > 0 ? `${m.total}d` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {stats.total > 0 && (
+                          <tfoot>
+                            <tr className="border-t-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-semibold">
+                              <td className="pt-2 pr-3">Sum</td>
+                              <td className="pt-2 px-2 text-right tabular-nums text-amber-600 dark:text-amber-400">{stats.syke > 0 ? `${stats.syke}d` : '—'}</td>
+                              <td className="pt-2 px-2 text-right tabular-nums text-blue-600 dark:text-blue-400">{stats.perm > 0 ? `${stats.perm}d` : '—'}</td>
+                              <td className="pt-2 px-2 text-right tabular-nums text-red-500 dark:text-red-400">{stats.ledig > 0 ? `${stats.ledig}d` : '—'}</td>
+                              <td className="pt-2 pl-2 text-right tabular-nums text-gray-900 dark:text-white">{stats.total}d</td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Perioder uten prosjekt */}
+                <div className="flex flex-col gap-1.5 border-t border-gray-100 dark:border-gray-800 pt-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Perioder uten prosjekt</p>
+                    {!ledigPerioder.some(p => p.til === null) && (
+                      <AddAbsencePeriodForm onAdd={(fra, til) => addLedigPeriod(fra, til)} color="green" />
+                    )}
+                  </div>
+                  {ledigPerioder.length === 0 ? (
+                    <p className="text-xs text-gray-400 dark:text-gray-600">Ingen registrerte — legges til automatisk når konsulent fjernes fra prosjekt</p>
+                  ) : (
+                    ledigPerioder.map((p, i) => {
                       const ongoing = p.til === null
                       return (
                         <div key={i} className="flex items-center gap-2 text-sm">
@@ -553,9 +595,9 @@ export function ConsultantDetailPage() {
                           </div>
                         </div>
                       )
-                    })}
-                  </div>
-                )}
+                    })
+                  )}
+                </div>
               </div>
             )
           })()}
