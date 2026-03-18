@@ -123,7 +123,7 @@ export function ConsultantListPage() {
       if (!res.ok) throw new Error()
       const { synced } = await res.json()
       setSyncMsg(`${synced} synkronisert`)
-    } catch { setSyncMsg('Feilet') }
+    } catch (e) { console.error('Sync failed:', e); setSyncMsg('Feilet') }
     finally { setSyncing(false) }
   }
 

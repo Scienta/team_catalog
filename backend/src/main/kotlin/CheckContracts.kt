@@ -20,6 +20,13 @@ suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: Str
         contractEnd.minusDays(warningDays) == today
     }
 
+    // Pre-fetch to eliminate N+1 queries
+    val allClients = firestore.collection("clients").get().get().documents
+        .associate { it.id to (it.getString("name") ?: "") }
+    val adminDocs = firestore.collection("admins").get().get().documents
+    val allAdminEmails = adminDocs.mapNotNull { it.getString("email") }
+    val adminEmailByUid = adminDocs.associate { it.id to (it.getString("email") ?: "") }
+
     var notified = 0
 
     for (doc in toNotify) {
@@ -29,28 +36,24 @@ suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: Str
         val warningDays = doc.getLong("warningDays") ?: continue
 
         val notifyAll = doc.getBoolean("notifyAll") ?: true
-        @Suppress("UNCHECKED_CAST")
-        val notifyList = doc.get("notifyList") as? List<String> ?: emptyList()
+        val notifyList = (doc.get("notifyList") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
 
-        // Find client names via projects
+        // Find client names via projects (projects already fetched, clients pre-fetched above)
         val projects = firestore.collection("projects")
             .whereArrayContains("consultantIds", doc.id)
             .get().get().documents
         val clientNames = projects.mapNotNull { p ->
             val clientId = p.getString("clientId") ?: return@mapNotNull null
-            firestore.collection("clients").document(clientId).get().get().getString("name")
+            allClients[clientId]
         }.distinct()
         val clientStr = clientNames.joinToString(", ").ifBlank { "ukjent kunde" }
 
         val contractEndFormatted = contractEnd.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
 
         val recipients: List<String> = if (notifyAll) {
-            firestore.collection("admins").get().get().documents
-                .mapNotNull { it.getString("email") }
+            allAdminEmails
         } else {
-            notifyList.mapNotNull { uid ->
-                firestore.collection("admins").document(uid).get().get().getString("email")
-            }
+            notifyList.mapNotNull { uid -> adminEmailByUid[uid]?.takeIf { it.isNotEmpty() } }
         }
 
         if (recipients.isEmpty()) continue

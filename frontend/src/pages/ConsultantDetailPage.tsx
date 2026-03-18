@@ -105,7 +105,7 @@ export function ConsultantDetailPage() {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.ok) setCv(await res.json())
-      } catch { /* silent */ }
+      } catch (e) { console.error('Failed to load CV:', e) }
       finally { setCvLoading(false) }
     }
     loadCV()

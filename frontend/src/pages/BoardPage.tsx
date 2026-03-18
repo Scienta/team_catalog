@@ -141,15 +141,20 @@ export function BoardPage() {
 
   async function handleDeleteClient(client: Client) {
     setDeleting(true)
-    const batch = writeBatch(db)
-    const projectSnap = await getDocs(query(collection(db, 'projects'), where('clientId', '==', client.id)))
-    projectSnap.docs.forEach((d) => batch.delete(d.ref))
-    const consultantSnap = await getDocs(query(collection(db, 'consultants'), where('clientId', '==', client.id)))
-    consultantSnap.docs.forEach((d) => batch.update(d.ref, { clientId: deleteField() }))
-    batch.delete(doc(db, 'clients', client.id))
-    await batch.commit()
-    setConfirmDeleteClient(null)
-    setDeleting(false)
+    try {
+      const batch = writeBatch(db)
+      const projectSnap = await getDocs(query(collection(db, 'projects'), where('clientId', '==', client.id)))
+      projectSnap.docs.forEach((d) => batch.delete(d.ref))
+      const consultantSnap = await getDocs(query(collection(db, 'consultants'), where('clientId', '==', client.id)))
+      consultantSnap.docs.forEach((d) => batch.update(d.ref, { clientId: deleteField() }))
+      batch.delete(doc(db, 'clients', client.id))
+      await batch.commit()
+      setConfirmDeleteClient(null)
+    } catch (e) {
+      console.error('Failed to delete client:', e)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (

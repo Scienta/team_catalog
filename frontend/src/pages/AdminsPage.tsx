@@ -160,8 +160,8 @@ export function AdminsPage() {
         await setDoc(doc(db, 'admins', uid), { name, email })
       }
       // If uid is empty, backend already wrote to pendingAdmins
-    } catch {
-      // silent
+    } catch (e) {
+      console.error('Failed to grant admin access:', e)
     } finally {
       setAdding(null)
     }
