@@ -151,12 +151,22 @@ fun buildFlowcaseClient(): HttpClient = HttpClient(CIO) {
 }
 
 suspend fun fetchFlowcaseUsers(apiKey: String): List<FlowcaseUser> {
+    val pageSize = 100
+    val allUsers = mutableListOf<FlowcaseUser>()
+    var offset = 0
     buildFlowcaseClient().use { client ->
-        return client.get("https://scienta.flowcase.com/api/v2/users/search") {
-            bearerAuth(apiKey)
-            parameter("limit", 1000)
-        }.body()
+        while (true) {
+            val page: List<FlowcaseUser> = client.get("https://scienta.flowcase.com/api/v2/users/search") {
+                bearerAuth(apiKey)
+                parameter("limit", pageSize)
+                parameter("offset", offset)
+            }.body()
+            allUsers.addAll(page)
+            if (page.size < pageSize) break
+            offset += pageSize
+        }
     }
+    return allUsers
 }
 
 // Photo URL is embedded in the user object from /users/search (image.url).

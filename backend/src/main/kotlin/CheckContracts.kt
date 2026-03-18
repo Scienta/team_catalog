@@ -35,6 +35,10 @@ suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: Str
         val contractEnd = runCatching { LocalDate.parse(contractEndStr, fmt) }.getOrNull() ?: continue
         val warningDays = doc.getLong("warningDays") ?: continue
 
+        // Idempotency: skip if we already sent for today
+        val lastNotifiedDate = doc.getString("lastNotifiedDate")
+        if (lastNotifiedDate == today.toString()) continue
+
         val notifyAll = doc.getBoolean("notifyAll") ?: true
         val notifyList = (doc.get("notifyList") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
 
@@ -66,6 +70,9 @@ suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: Str
             .build()
 
         resendClient.emails().send(emailRequest)
+        firestore.collection("consultants").document(doc.id)
+            .update("lastNotifiedDate", today.toString())
+            .get()
         notified++
     }
 

@@ -68,7 +68,7 @@ fun Application.configureRouting(config: AppConfig) {
         }
 
         post("/sync") {
-            call.authenticateFirebase() ?: return@post
+            val adminUid = call.authenticateFirebase() ?: return@post
 
             val allUsers = fetchFlowcaseUsers(config.flowcaseApiKey)
             val activeUsers = allUsers.filter { !it.deactivated }
@@ -76,6 +76,7 @@ fun Application.configureRouting(config: AppConfig) {
             val photoUrls = extractPhotoUrls(activeUsers)
 
             val firestore = getFirestore()
+            val adminEmail = firestore.collection("admins").document(adminUid).get().get().getString("email") ?: ""
 
             // Upsert active consultants (fetch CV to extract filterable fields)
             for (user in activeUsers) {
@@ -110,7 +111,8 @@ fun Application.configureRouting(config: AppConfig) {
                     "technologies" to techTags,
                     "projectCustomers" to projectCustomers,
                     "employers" to employers,
-                    "schools" to schools
+                    "schools" to schools,
+                    "lastSyncedAt" to FieldValue.serverTimestamp()
                 )
                 firestore.collection("consultants")
                     .document(user.id)
@@ -139,6 +141,15 @@ fun Application.configureRouting(config: AppConfig) {
                     deleted++
                 }
             }
+
+            writeAuditLog(
+                adminUid = adminUid,
+                adminEmail = adminEmail,
+                action = "SYNC",
+                targetType = "system",
+                targetId = "flowcase",
+                details = mapOf("synced" to activeUsers.size, "deleted" to deleted)
+            )
 
             call.respond(SyncResponse(synced = activeUsers.size, deleted = deleted))
         }

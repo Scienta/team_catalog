@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { collection, onSnapshot, doc, deleteField, addDoc, getDocs, query, where, writeBatch } from 'firebase/firestore'
 import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../firebase'
+import { writeAuditLog } from '../lib/auditLog'
 
 type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
@@ -149,6 +150,7 @@ export function BoardPage() {
       consultantSnap.docs.forEach((d) => batch.update(d.ref, { clientId: deleteField() }))
       batch.delete(doc(db, 'clients', client.id))
       await batch.commit()
+      await writeAuditLog('DELETE_CLIENT', 'client', client.id, { name: client.name })
       setConfirmDeleteClient(null)
     } catch (e) {
       console.error('Failed to delete client:', e)

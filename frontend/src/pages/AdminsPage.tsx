@@ -3,6 +3,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 import { getIdToken } from 'firebase/auth'
 import { db, auth } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
+import { writeAuditLog } from '../lib/auditLog'
 
 function DevTools() {
   const [testEmail, setTestEmail] = useState('')
@@ -158,8 +159,11 @@ export function AdminsPage() {
       if (uid) {
         // Already in Firebase Auth — add directly
         await setDoc(doc(db, 'admins', uid), { name, email })
+        await writeAuditLog('GRANT_ADMIN', 'admin', uid, { name, email })
+      } else {
+        // Pending — will be promoted on first login
+        await writeAuditLog('GRANT_ADMIN', 'pendingAdmin', email, { name, email })
       }
-      // If uid is empty, backend already wrote to pendingAdmins
     } catch (e) {
       console.error('Failed to grant admin access:', e)
     } finally {
@@ -169,8 +173,13 @@ export function AdminsPage() {
 
   async function handleConfirmRemove() {
     if (!confirmRemove) return
-    if (confirmRemove.type === 'admin') await deleteDoc(doc(db, 'admins', confirmRemove.id))
-    else await deleteDoc(doc(db, 'pendingAdmins', confirmRemove.email))
+    if (confirmRemove.type === 'admin') {
+      await deleteDoc(doc(db, 'admins', confirmRemove.id))
+      await writeAuditLog('REMOVE_ADMIN', 'admin', confirmRemove.id, { name: confirmRemove.name })
+    } else {
+      await deleteDoc(doc(db, 'pendingAdmins', confirmRemove.email))
+      await writeAuditLog('REMOVE_ADMIN', 'pendingAdmin', confirmRemove.email, { name: confirmRemove.name })
+    }
     setConfirmRemove(null)
   }
 

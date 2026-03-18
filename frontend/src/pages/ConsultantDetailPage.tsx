@@ -21,6 +21,7 @@ type Consultant = {
   warningDays?: number
   notifyAll?: boolean
   notifyList?: string[]
+  lastSyncedAt?: { seconds: number; nanoseconds: number }
 }
 
 type Admin = { id: string; name: string; email: string }
@@ -39,6 +40,15 @@ type CVData = {
 }
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']
+
+function fmtRelative(date: Date): string {
+  const diff = Date.now() - date.getTime()
+  const h = Math.floor(diff / 3600000)
+  const d = Math.floor(diff / 86400000)
+  if (d > 0) return `${d} dag${d !== 1 ? 'er' : ''} siden`
+  if (h > 0) return `${h} time${h !== 1 ? 'r' : ''} siden`
+  return 'akkurat nå'
+}
 
 function fmtPeriod(yFrom?: number, mFrom?: number, yTo?: number, mTo?: number): string {
   const from = yFrom ? (mFrom ? `${MONTHS[mFrom - 1]} ${yFrom}` : `${yFrom}`) : ''
@@ -182,6 +192,11 @@ export function ConsultantDetailPage() {
                 </svg>
                 <span>{consultant.telephone}</span>
               </a>
+            )}
+            {consultant.lastSyncedAt && (
+              <span className="text-xs text-gray-300 dark:text-gray-700">
+                Synkronisert {fmtRelative(new Date(consultant.lastSyncedAt.seconds * 1000))}
+              </span>
             )}
           </div>
         </div>
