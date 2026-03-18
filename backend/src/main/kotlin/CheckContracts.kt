@@ -5,9 +5,9 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-suspend fun checkAndNotifyContracts(): Int {
+suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: String = ""): Int {
     val firestore = getFirestore()
-    val today = LocalDate.now(ZoneOffset.UTC)
+    val today = overrideDate ?: LocalDate.now(ZoneOffset.UTC)
     val fmt = DateTimeFormatter.ISO_LOCAL_DATE
 
     // Fetch all consultants with both contractEnd and warningDays set
@@ -55,17 +55,11 @@ suspend fun checkAndNotifyContracts(): Int {
 
         if (recipients.isEmpty()) continue
 
-        val emailBody = """
-            <p>Hei,</p>
-            <p>Dette er en påminnelse om at kontrakten til <strong>$name</strong> hos <strong>$clientStr</strong> utløper om <strong>$warningDays dager</strong> ($contractEndFormatted).</p>
-            <p>Logg inn for å se detaljer.</p>
-        """.trimIndent()
-
         val emailRequest = CreateEmailOptions.builder()
             .from("onboarding@resend.dev")
             .to(recipients)
             .subject("Kontraktsvarsel: $name utløper om $warningDays dager")
-            .html(emailBody)
+            .html(contractWarningEmail(name, clientStr, contractEndFormatted, warningDays, appUrl))
             .build()
 
         resendClient.emails().send(emailRequest)

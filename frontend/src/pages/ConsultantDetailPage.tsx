@@ -10,6 +10,12 @@ type Consultant = {
   email?: string
   telephone?: string
   isInternal?: boolean
+  sykemeldt?: boolean
+  sykemeldtFra?: string
+  sykemeldtTil?: string
+  permittert?: boolean
+  permittertFra?: string
+  permittertTil?: string
   contractStart?: string
   contractEnd?: string
   warningDays?: number
@@ -58,6 +64,12 @@ export function ConsultantDetailPage() {
   const [cvLoading, setCvLoading] = useState(true)
 
   const [isInternal, setIsInternal] = useState(false)
+  const [isSykemeldt, setIsSykemeldt] = useState(false)
+  const [sykemeldtFra, setSykemeldtFra] = useState('')
+  const [sykemeldtTil, setSykemeldtTil] = useState('')
+  const [isPermittert, setIsPermittert] = useState(false)
+  const [permittertFra, setPermittertFra] = useState('')
+  const [permittertTil, setPermittertTil] = useState('')
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDays, setWarningDays] = useState<number | ''>('')
@@ -71,6 +83,12 @@ export function ConsultantDetailPage() {
       const data = snap.data() as Consultant
       setConsultant(data)
       setIsInternal(data.isInternal ?? false)
+      setIsSykemeldt(data.sykemeldt ?? false)
+      setSykemeldtFra(data.sykemeldtFra ?? '')
+      setSykemeldtTil(data.sykemeldtTil ?? '')
+      setIsPermittert(data.permittert ?? false)
+      setPermittertFra(data.permittertFra ?? '')
+      setPermittertTil(data.permittertTil ?? '')
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
       setWarningDays(data.warningDays ?? '')
@@ -100,6 +118,12 @@ export function ConsultantDetailPage() {
     setSaving(true)
     await updateDoc(doc(db, 'consultants', id), {
       isInternal,
+      sykemeldt: isSykemeldt,
+      sykemeldtFra: isSykemeldt ? (sykemeldtFra || null) : null,
+      sykemeldtTil: isSykemeldt ? (sykemeldtTil || null) : null,
+      permittert: isPermittert,
+      permittertFra: isPermittert ? (permittertFra || null) : null,
+      permittertTil: isPermittert ? (permittertTil || null) : null,
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
       warningDays: warningDays !== '' ? warningDays : null,
@@ -182,6 +206,64 @@ export function ConsultantDetailPage() {
             >
               <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white dark:bg-gray-900 shadow transition-transform ${isInternal ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
+          </div>
+
+          {/* Sykemeldt */}
+          <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isSykemeldt ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Sykemeldt</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Vises på dashboard og board</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSykemeldt(!isSykemeldt)}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isSykemeldt ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isSykemeldt ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+            {isSykemeldt && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Fra</label>
+                  <input type="date" value={sykemeldtFra} onChange={(e) => setSykemeldtFra(e.target.value)} className="border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Til</label>
+                  <input type="date" value={sykemeldtTil} onChange={(e) => setSykemeldtTil(e.target.value)} className="border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Permittert */}
+          <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isPermittert ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Permittert</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Vises på dashboard og board</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPermittert(!isPermittert)}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isPermittert ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isPermittert ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
+            {isPermittert && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wider">Fra</label>
+                  <input type="date" value={permittertFra} onChange={(e) => setPermittertFra(e.target.value)} className="border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-blue-400 w-full" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wider">Til</label>
+                  <input type="date" value={permittertTil} onChange={(e) => setPermittertTil(e.target.value)} className="border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-blue-400 w-full" />
+                </div>
+              </div>
+            )}
           </div>
 
           {!isInternal && (

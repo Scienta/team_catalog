@@ -4,6 +4,107 @@ import { getIdToken } from 'firebase/auth'
 import { db, auth } from '../firebase'
 import { useAuth } from '../hooks/useAuth'
 
+function DevTools() {
+  const [testEmail, setTestEmail] = useState('')
+  const [testEmailStatus, setTestEmailStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+  const [checkDate, setCheckDate] = useState(new Date().toISOString().split('T')[0])
+  const [checkStatus, setCheckStatus] = useState<{ state: 'idle' | 'loading' | 'ok' | 'error'; message?: string }>({ state: 'idle' })
+
+  async function sendTestEmail() {
+    if (!testEmail) return
+    setTestEmailStatus('loading')
+    try {
+      const token = await getIdToken(auth.currentUser!)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/test-email`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmail }),
+      })
+      setTestEmailStatus(res.ok ? 'ok' : 'error')
+    } catch {
+      setTestEmailStatus('error')
+    }
+  }
+
+  async function simulateCheckContracts() {
+    setCheckStatus({ state: 'loading' })
+    try {
+      const token = await getIdToken(auth.currentUser!)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/check-contracts?date=${checkDate}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setCheckStatus({ state: 'ok', message: `${data.notified} varsler sendt for ${data.date}` })
+    } catch {
+      setCheckStatus({ state: 'error', message: 'Noe gikk galt' })
+    }
+  }
+
+  return (
+    <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 overflow-hidden">
+      <div className="px-5 py-3 border-b border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex items-center gap-2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span className="text-xs font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider">Dev-verktøy</span>
+      </div>
+
+      <div className="p-5 flex flex-col gap-5">
+        {/* Test email */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Send test-epost</p>
+          <p className="text-xs text-gray-400 dark:text-gray-600">Verifiser at Resend-integrasjonen fungerer ved å sende en enkel epost.</p>
+          <div className="flex gap-2 mt-1">
+            <input
+              type="email"
+              placeholder="din@epost.no"
+              value={testEmail}
+              onChange={(e) => { setTestEmail(e.target.value); setTestEmailStatus('idle') }}
+              className="flex-1 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <button
+              onClick={sendTestEmail}
+              disabled={!testEmail || testEmailStatus === 'loading'}
+              className="text-xs font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+            >
+              {testEmailStatus === 'loading' ? '…' : 'Send'}
+            </button>
+          </div>
+          {testEmailStatus === 'ok' && <p className="text-xs text-green-600 dark:text-green-400">Sendt! Sjekk innboksen (og spam).</p>}
+          {testEmailStatus === 'error' && <p className="text-xs text-red-500">Noe gikk galt. Sjekk Resend-dashboardet.</p>}
+        </div>
+
+        <div className="border-t border-gray-100 dark:border-gray-800" />
+
+        {/* Simulate contract check */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Simuler kontraktssjekk</p>
+          <p className="text-xs text-gray-400 dark:text-gray-600">Kjør <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/check-contracts</code> med en bestemt dato for å teste varsling.</p>
+          <div className="flex gap-2 mt-1">
+            <input
+              type="date"
+              value={checkDate}
+              onChange={(e) => { setCheckDate(e.target.value); setCheckStatus({ state: 'idle' }) }}
+              className="flex-1 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            />
+            <button
+              onClick={simulateCheckContracts}
+              disabled={checkStatus.state === 'loading'}
+              className="text-xs font-medium bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700 dark:hover:bg-gray-100 disabled:opacity-40 px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+            >
+              {checkStatus.state === 'loading' ? '…' : 'Kjør'}
+            </button>
+          </div>
+          {checkStatus.state === 'ok' && <p className="text-xs text-green-600 dark:text-green-400">{checkStatus.message}</p>}
+          {checkStatus.state === 'error' && <p className="text-xs text-red-500">{checkStatus.message}</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type Admin = { id: string; name: string; email: string }
 type PendingAdmin = { id: string; name: string; email: string }
 type Consultant = { id: string; name: string; photoUrl?: string; email?: string; isInternal?: boolean }
@@ -162,6 +263,8 @@ export function AdminsPage() {
           ))}
         </div>
       )}
+
+      <DevTools />
 
       {/* Internal consultants — grant access */}
       {internalNotAdmin.length > 0 && (

@@ -1,5 +1,6 @@
 package com.scienta
 
+import com.google.cloud.firestore.FieldValue
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserRecord
 import io.ktor.http.*
@@ -14,10 +15,16 @@ import kotlinx.serialization.Serializable
 data class HealthResponse(val status: String)
 
 @Serializable
-data class SyncResponse(val synced: Int)
+data class SyncResponse(val synced: Int, val deleted: Int)
 
 @Serializable
-data class CheckContractsResponse(val notified: Int)
+data class CheckContractsResponse(val notified: Int, val date: String)
+
+@Serializable
+data class TestEmailRequest(val to: String)
+
+@Serializable
+data class TestEmailResponse(val sent: Boolean)
 
 @Serializable
 data class LookupUserRequest(val email: String)
@@ -111,15 +118,29 @@ fun Application.configureRouting(config: AppConfig) {
                     .get()
             }
 
-            // Delete consultants no longer active in Flowcase
+            // Delete consultants no longer active in Flowcase — remove all personal data
             val existing = firestore.collection("consultants").get().get()
+            var deleted = 0
             for (doc in existing.documents) {
                 if (doc.id !in activeIds) {
-                    doc.reference.delete().get()
+                    val batch = firestore.batch()
+
+                    // Remove consultant from every project that references them
+                    val projectsWithConsultant = firestore.collection("projects")
+                        .whereArrayContains("consultantIds", doc.id)
+                        .get().get()
+                    for (project in projectsWithConsultant.documents) {
+                        batch.update(project.reference, "consultantIds", FieldValue.arrayRemove(doc.id))
+                    }
+
+                    // Delete the consultant document (all personal data)
+                    batch.delete(doc.reference)
+                    batch.commit().get()
+                    deleted++
                 }
             }
 
-            call.respond(SyncResponse(activeUsers.size))
+            call.respond(SyncResponse(synced = activeUsers.size, deleted = deleted))
         }
 
         post("/admin/lookup-user") {
@@ -239,13 +260,44 @@ fun Application.configureRouting(config: AppConfig) {
 
         post("/check-contracts") {
             val secret = call.request.headers["X-Scheduler-Secret"]
-            if (secret == null || secret != config.schedulerSecret) {
-                call.respond(HttpStatusCode.Unauthorized, "Invalid scheduler secret")
+            val isScheduler = secret != null && secret == config.schedulerSecret
+            if (!isScheduler && call.checkFirebaseAdmin() == null) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid scheduler secret or unauthenticated")
                 return@post
             }
 
-            val notified = checkAndNotifyContracts()
-            call.respond(CheckContractsResponse(notified))
+            val dateParam = call.request.queryParameters["date"]
+            val overrideDate = dateParam?.let { param ->
+                val parsed = runCatching { java.time.LocalDate.parse(param) }.getOrNull()
+                if (parsed == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid date format, expected YYYY-MM-DD")
+                    return@post
+                }
+                val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+                if (parsed.isBefore(today.minusDays(7)) || parsed.isAfter(today.plusDays(7))) {
+                    call.respond(HttpStatusCode.BadRequest, "Date must be within 7 days of today")
+                    return@post
+                }
+                parsed
+            }
+
+            val notified = checkAndNotifyContracts(overrideDate, config.appUrl)
+            val usedDate = (overrideDate ?: java.time.LocalDate.now(java.time.ZoneOffset.UTC)).toString()
+            call.respond(CheckContractsResponse(notified, usedDate))
+        }
+
+        post("/test-email") {
+            call.authenticateFirebase() ?: return@post
+
+            val body = call.receive<TestEmailRequest>()
+            val emailRequest = com.resend.services.emails.model.CreateEmailOptions.builder()
+                .from("onboarding@resend.dev")
+                .to(listOf(body.to))
+                .subject("Test-epost fra Konsulent Admin")
+                .html(testEmail())
+                .build()
+            resendClient.emails().send(emailRequest)
+            call.respond(TestEmailResponse(sent = true))
         }
     }
 }

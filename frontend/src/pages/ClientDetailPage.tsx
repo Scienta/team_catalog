@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore'
+import { doc, onSnapshot, updateDoc, collection, query, where, addDoc, deleteDoc, arrayUnion, arrayRemove, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase'
 
 type Client = {
@@ -10,6 +10,8 @@ type Client = {
   contactName?: string
   contactPhone?: string
   contactEmail?: string
+  logoUrl?: string
+  contactPhotoUrl?: string
 }
 
 type Project = {
@@ -45,10 +47,15 @@ export function ClientDetailPage() {
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [contactPhotoUrl, setContactPhotoUrl] = useState('')
 
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [addingProject, setAddingProject] = useState(false)
+
+  const [draggingConsultant, setDraggingConsultant] = useState<{ id: string; fromProjectId: string } | null>(null)
+  const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -63,6 +70,8 @@ export function ClientDetailPage() {
       setContactName(data.contactName ?? '')
       setContactPhone(data.contactPhone ?? '')
       setContactEmail(data.contactEmail ?? '')
+      setLogoUrl(data.logoUrl ?? '')
+      setContactPhotoUrl(data.contactPhotoUrl ?? '')
     })
 
     const unsubProjects = onSnapshot(
@@ -79,7 +88,7 @@ export function ClientDetailPage() {
 
   async function handleSaveClient() {
     if (!id) return
-    await updateDoc(doc(db, 'clients', id), { name, description: description || null, slackChannel: slackChannel || null, contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null })
+    await updateDoc(doc(db, 'clients', id), { name, description: description || null, slackChannel: slackChannel || null, contactName: contactName || null, contactPhone: contactPhone || null, contactEmail: contactEmail || null, logoUrl: logoUrl || null, contactPhotoUrl: contactPhotoUrl || null })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -96,6 +105,19 @@ export function ClientDetailPage() {
 
   async function handleDeleteProject(projectId: string) {
     await deleteDoc(doc(db, 'projects', projectId))
+  }
+
+  async function handleDropOnProject(targetProjectId: string) {
+    if (!draggingConsultant || draggingConsultant.fromProjectId === targetProjectId) return
+    const batch = writeBatch(db)
+    // Remove from all projects to enforce single-project invariant
+    for (const p of projects) {
+      if (p.consultantIds?.includes(draggingConsultant.id)) {
+        batch.update(doc(db, 'projects', p.id), { consultantIds: arrayRemove(draggingConsultant.id) })
+      }
+    }
+    batch.update(doc(db, 'projects', targetProjectId), { consultantIds: arrayUnion(draggingConsultant.id) })
+    await batch.commit()
   }
 
   if (!client) return null
@@ -127,6 +149,11 @@ export function ClientDetailPage() {
           </div>
         </div>
 
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass}>Logo URL</label>
+          <input type="url" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className={inputClass} placeholder="https://logo.clearbit.com/firma.com" />
+        </div>
+
         <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
         <p className={labelClass}>Kontaktperson</p>
@@ -134,6 +161,10 @@ export function ClientDetailPage() {
           <div className="flex flex-col gap-1.5">
             <label className={labelClass}>Navn</label>
             <input type="text" value={contactName} onChange={(e) => setContactName(e.target.value)} className={inputClass} placeholder="Fornavn Etternavn" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className={labelClass}>Bilde URL</label>
+            <input type="url" value={contactPhotoUrl} onChange={(e) => setContactPhotoUrl(e.target.value)} className={inputClass} placeholder="https://..." />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -184,6 +215,11 @@ export function ClientDetailPage() {
               project={p}
               allConsultants={consultants}
               onDelete={() => handleDeleteProject(p.id)}
+              isDropTarget={dragOverProjectId === p.id && draggingConsultant?.fromProjectId !== p.id}
+              onConsultantDragStart={(consultantId) => setDraggingConsultant({ id: consultantId, fromProjectId: p.id })}
+              onDragOver={() => setDragOverProjectId(p.id)}
+              onDragLeave={() => setDragOverProjectId(null)}
+              onDrop={async () => { await handleDropOnProject(p.id); setDraggingConsultant(null); setDragOverProjectId(null) }}
             />
           ))}
         </div>
@@ -192,7 +228,16 @@ export function ClientDetailPage() {
   )
 }
 
-function ProjectCard({ project, allConsultants, onDelete }: { project: Project; allConsultants: Consultant[]; onDelete: () => void }) {
+function ProjectCard({ project, allConsultants, onDelete, isDropTarget, onConsultantDragStart, onDragOver, onDragLeave, onDrop }: {
+  project: Project
+  allConsultants: Consultant[]
+  onDelete: () => void
+  isDropTarget?: boolean
+  onConsultantDragStart?: (consultantId: string) => void
+  onDragOver?: () => void
+  onDragLeave?: () => void
+  onDrop?: () => void
+}) {
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(project.name)
   const [description, setDescription] = useState(project.description ?? '')
@@ -223,7 +268,12 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
   }
 
   return (
-    <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden transition-colors">
+    <div
+      className={`bg-white dark:bg-[#1a1a1a] rounded-2xl border shadow-sm overflow-hidden transition-colors ${isDropTarget ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600' : 'border-gray-100 dark:border-gray-800'}`}
+      onDragOver={(e) => { e.preventDefault(); onDragOver?.() }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => { e.preventDefault(); onDrop?.() }}
+    >
       <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
         {editing ? (
           <input value={name} onChange={(e) => setName(e.target.value)} className="text-sm font-semibold text-gray-900 dark:text-white bg-transparent border-b border-gray-300 dark:border-gray-600 focus:outline-none flex-1 mr-4" />
@@ -271,7 +321,12 @@ function ProjectCard({ project, allConsultants, onDelete }: { project: Project; 
           <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
             {/* Assigned */}
             {assigned.map((c) => (
-              <div key={c.id} className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 last:border-b-0 bg-gray-50/60 dark:bg-gray-800/30">
+              <div
+                key={c.id}
+                draggable
+                onDragStart={() => onConsultantDragStart?.(c.id)}
+                className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 dark:border-gray-800 last:border-b-0 bg-gray-50/60 dark:bg-gray-800/30 cursor-grab active:cursor-grabbing"
+              >
                 <div className="flex items-center gap-2.5">
                   {c.photoUrl ? (
                     <img src={c.photoUrl} alt={c.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />

@@ -21,6 +21,20 @@ suspend fun ApplicationCall.verifyFirebaseToken(): String? {
     }
 }
 
+// Returns uid if the request is from an authenticated admin — no response sent on failure
+suspend fun ApplicationCall.checkFirebaseAdmin(): String? {
+    val authHeader = request.headers["Authorization"]
+    if (authHeader == null || !authHeader.startsWith("Bearer ")) return null
+    val token = authHeader.removePrefix("Bearer ").trim()
+    val uid = try {
+        getFirebaseAuth().verifyIdToken(token).uid
+    } catch (_: FirebaseAuthException) {
+        return null
+    }
+    val adminDoc = getFirestore().collection("admins").document(uid).get().get()
+    return if (adminDoc.exists()) uid else null
+}
+
 suspend fun ApplicationCall.authenticateFirebase(): String? {
     val authHeader = request.headers["Authorization"]
     if (authHeader == null || !authHeader.startsWith("Bearer ")) {

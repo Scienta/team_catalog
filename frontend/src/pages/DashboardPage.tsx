@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; clientId?: string }
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -33,6 +33,8 @@ export function DashboardPage() {
 
   // Exclude internal employees from all stats
   const externalConsultants = consultants.filter((c) => !c.isInternal)
+  const sykemeldte = externalConsultants.filter((c) => c.sykemeldt).sort((a, b) => a.name.localeCompare(b.name))
+  const permitterte = externalConsultants.filter((c) => c.permittert).sort((a, b) => a.name.localeCompare(b.name))
 
   const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
 
@@ -102,6 +104,20 @@ export function DashboardPage() {
       sub: `Mer enn 30 dager igjen`,
       color: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800',
       valueColor: 'text-emerald-600 dark:text-emerald-500',
+    },
+    {
+      label: 'Sykemeldte',
+      value: sykemeldte.length,
+      sub: sykemeldte.length === 0 ? 'Ingen sykemeldte' : sykemeldte.length === 1 ? '1 konsulent' : `${sykemeldte.length} konsulenter`,
+      color: sykemeldte.length > 0 ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-[#1a1a1a]',
+      valueColor: sykemeldte.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-900 dark:text-white',
+    },
+    {
+      label: 'Permitterte',
+      value: permitterte.length,
+      sub: permitterte.length === 0 ? 'Ingen permitterte' : permitterte.length === 1 ? '1 konsulent' : `${permitterte.length} konsulenter`,
+      color: permitterte.length > 0 ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-[#1a1a1a]',
+      valueColor: permitterte.length > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white',
     },
     {
       label: 'Kunder',
@@ -281,6 +297,62 @@ export function DashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Sykemeldte */}
+          {sykemeldte.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                Sykemeldte
+                <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-2 py-0.5 rounded-md">
+                  {sykemeldte.length}
+                </span>
+              </h2>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                {sykemeldte.map((c, i) => (
+                  <div
+                    key={c.id}
+                    onClick={() => navigate(`/consultant/${c.id}`)}
+                    className={`flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-amber-50/60 dark:hover:bg-amber-950/20 transition-colors ${i > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
+                  >
+                    {c.photoUrl ? (
+                      <img src={c.photoUrl} alt={c.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 opacity-70" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                    )}
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Permitterte */}
+          {permitterte.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                Permitterte
+                <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-2 py-0.5 rounded-md">
+                  {permitterte.length}
+                </span>
+              </h2>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm overflow-hidden">
+                {permitterte.map((c, i) => (
+                  <div
+                    key={c.id}
+                    onClick={() => navigate(`/consultant/${c.id}`)}
+                    className={`flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-blue-50/60 dark:hover:bg-blue-950/20 transition-colors ${i > 0 ? 'border-t border-gray-100 dark:border-gray-800' : ''}`}
+                  >
+                    {c.photoUrl ? (
+                      <img src={c.photoUrl} alt={c.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 opacity-70" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
+                    )}
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Consultants per client */}
           {consultantsPerClient.length > 0 && (
