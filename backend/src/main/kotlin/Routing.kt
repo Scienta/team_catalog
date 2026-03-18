@@ -9,6 +9,11 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -78,52 +83,71 @@ fun Application.configureRouting(config: AppConfig) {
             val firestore = getFirestore()
             val adminEmail = firestore.collection("admins").document(adminUid).get().get().getString("email") ?: ""
 
-            // Upsert active consultants (fetch CV to extract filterable fields)
-            for (user in activeUsers) {
-                val cv = try { fetchConsultantCV(config.flowcaseApiKey, user.id, user.default_cv_id) } catch (_: Exception) { null }
-                val techTags: List<String> = cv?.technologies
-                    ?.filter { it.disabled != true }
-                    ?.flatMap { group -> group.technology_skills.mapNotNull { skill -> skill.tags?.text() } }
-                    ?: emptyList()
-                val projectCustomers: List<String> = cv?.project_experiences
-                    ?.filter { it.disabled != true }
-                    ?.mapNotNull { it.customer?.text() }
-                    ?.distinct()
-                    ?: emptyList()
-                val employers: List<String> = cv?.work_experiences
-                    ?.filter { it.disabled != true }
-                    ?.mapNotNull { it.employer?.text() }
-                    ?.distinct()
-                    ?: emptyList()
-                val schools: List<String> = cv?.educations
-                    ?.filter { it.disabled != true }
-                    ?.mapNotNull { it.school?.text() }
-                    ?.distinct()
-                    ?: emptyList()
-
-                val rawPhotoUrl = photoUrls[user.id]
-                val photoUrl: Any = when {
-                    rawPhotoUrl.isNullOrBlank() -> FieldValue.delete()
-                    rawPhotoUrl.startsWith("/") -> "https://scienta.flowcase.com$rawPhotoUrl"
-                    else -> rawPhotoUrl
+            // Phase 1: Write name/photo/contact for all users in batched Firestore writes.
+            // No CV fetch needed here — photos and basic info appear immediately.
+            for (chunk in activeUsers.chunked(400)) {
+                val batch = firestore.batch()
+                for (user in chunk) {
+                    val rawPhotoUrl = photoUrls[user.id]
+                    val photoUrl: Any = when {
+                        rawPhotoUrl.isNullOrBlank() -> FieldValue.delete()
+                        rawPhotoUrl.startsWith("/") -> "https://scienta.flowcase.com$rawPhotoUrl"
+                        else -> rawPhotoUrl
+                    }
+                    batch.set(
+                        firestore.collection("consultants").document(user.id),
+                        mapOf(
+                            "flowcaseId" to user.id,
+                            "name" to user.name,
+                            "photoUrl" to photoUrl,
+                            "email" to (user.email ?: ""),
+                            "telephone" to (user.telephone ?: ""),
+                            "defaultCvId" to (user.default_cv_id ?: ""),
+                            "lastSyncedAt" to FieldValue.serverTimestamp()
+                        ),
+                        com.google.cloud.firestore.SetOptions.merge()
+                    )
                 }
-                val data = mapOf(
-                    "flowcaseId" to user.id,
-                    "name" to user.name,
-                    "photoUrl" to photoUrl,
-                    "email" to (user.email ?: ""),
-                    "telephone" to (user.telephone ?: ""),
-                    "defaultCvId" to (user.default_cv_id ?: ""),
-                    "technologies" to techTags,
-                    "projectCustomers" to projectCustomers,
-                    "employers" to employers,
-                    "schools" to schools,
-                    "lastSyncedAt" to FieldValue.serverTimestamp()
-                )
-                firestore.collection("consultants")
-                    .document(user.id)
-                    .set(data, com.google.cloud.firestore.SetOptions.merge())
-                    .get()
+                batch.commit().get()
+            }
+
+            // Phase 2: Fetch all CVs in parallel (max 10 concurrent) and update filterable fields.
+            val semaphore = Semaphore(10)
+            coroutineScope {
+                activeUsers
+                    .filter { !it.default_cv_id.isNullOrBlank() }
+                    .map { user ->
+                        async {
+                            semaphore.withPermit {
+                                try {
+                                    val cv = fetchConsultantCV(config.flowcaseApiKey, user.id, user.default_cv_id)
+                                    if (cv != null) {
+                                        val techTags = cv.technologies
+                                            .filter { it.disabled != true }
+                                            .flatMap { group -> group.technology_skills.mapNotNull { it.tags?.text() } }
+                                        val projectCustomers = cv.project_experiences
+                                            .filter { it.disabled != true }
+                                            .mapNotNull { it.customer?.text() }.distinct()
+                                        val employers = cv.work_experiences
+                                            .filter { it.disabled != true }
+                                            .mapNotNull { it.employer?.text() }.distinct()
+                                        val schools = cv.educations
+                                            .filter { it.disabled != true }
+                                            .mapNotNull { it.school?.text() }.distinct()
+                                        firestore.collection("consultants").document(user.id)
+                                            .update(mapOf(
+                                                "technologies" to techTags,
+                                                "projectCustomers" to projectCustomers,
+                                                "employers" to employers,
+                                                "schools" to schools
+                                            )).get()
+                                    }
+                                } catch (_: Exception) {
+                                    // Don't fail the entire sync for one bad CV
+                                }
+                            }
+                        }
+                    }.awaitAll()
             }
 
             // Delete consultants no longer active in Flowcase — remove all personal data

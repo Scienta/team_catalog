@@ -118,29 +118,19 @@ data class FlowcaseCVFull(
 )
 
 suspend fun fetchConsultantCV(apiKey: String, userId: String, defaultCvId: String?): FlowcaseCVFull? {
-    // Resolve CV id: prefer the stored defaultCvId, otherwise fetch from users/search
-    val cvId: String = if (!defaultCvId.isNullOrBlank()) {
-        defaultCvId
-    } else {
-        buildFlowcaseClient().use { client ->
-            val users: List<FlowcaseUser> = try {
-                client.get("https://scienta.flowcase.com/api/v2/users/search") {
-                    bearerAuth(apiKey)
-                    parameter("limit", 1000)
-                }.body()
-            } catch (e: Exception) { return null }
-            users.find { it.id == userId }?.default_cv_id ?: return null
-        }
-    }
-
+    if (defaultCvId.isNullOrBlank()) return null
     return buildFlowcaseClient().use { client ->
-        try {
-            client.get("https://scienta.flowcase.com/api/v3/cvs/$userId/$cvId") {
-                bearerAuth(apiKey)
-            }.body()
-        } catch (e: Exception) {
-            null
-        }
+        fetchConsultantCVWithClient(client, apiKey, userId, defaultCvId)
+    }
+}
+
+suspend fun fetchConsultantCVWithClient(client: HttpClient, apiKey: String, userId: String, cvId: String): FlowcaseCVFull? {
+    return try {
+        client.get("https://scienta.flowcase.com/api/v3/cvs/$userId/$cvId") {
+            bearerAuth(apiKey)
+        }.body()
+    } catch (e: Exception) {
+        null
     }
 }
 
