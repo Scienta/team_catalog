@@ -71,6 +71,48 @@ function absenceDurationLabel(p: AbsencePeriod): string {
   return `${Math.round(days / 30)} mnd`
 }
 
+function sumPeriodDays(periods: AbsencePeriod[]): number {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.reduce((sum, p) => {
+    const fra = new Date(p.fra + 'T00:00:00')
+    const til = new Date((p.til ?? today) + 'T00:00:00')
+    return sum + Math.max(0, Math.round((til.getTime() - fra.getTime()) / 86400000))
+  }, 0)
+}
+
+function totalLedigUnionDays(
+  ledigPerioder: AbsencePeriod[],
+  sykemeldtPerioder: AbsencePeriod[],
+  permittertPerioder: AbsencePeriod[]
+): number {
+  const today = new Date().toISOString().split('T')[0]
+  const all = [...ledigPerioder, ...sykemeldtPerioder, ...permittertPerioder]
+    .map(p => ({ fra: p.fra, til: p.til ?? today }))
+    .filter(p => p.fra <= today)
+    .sort((a, b) => a.fra.localeCompare(b.fra))
+
+  const merged: { fra: string; til: string }[] = []
+  for (const p of all) {
+    if (merged.length === 0 || p.fra > merged[merged.length - 1].til) {
+      merged.push({ ...p })
+    } else if (p.til > merged[merged.length - 1].til) {
+      merged[merged.length - 1].til = p.til
+    }
+  }
+  return merged.reduce((sum, p) => {
+    const fra = new Date(p.fra + 'T00:00:00')
+    const til = new Date(p.til + 'T00:00:00')
+    return sum + Math.round((til.getTime() - fra.getTime()) / 86400000)
+  }, 0)
+}
+
+function formatDays(days: number): string {
+  if (days === 0) return '0d'
+  if (days < 7) return `${days}d`
+  if (days < 60) return `${Math.floor(days / 7)}u ${days % 7 > 0 ? `${days % 7}d` : ''}`.trim()
+  return `${Math.round(days / 30)} mnd`
+}
+
 function fmtRelative(date: Date): string {
   const diff = Date.now() - date.getTime()
   const h = Math.floor(diff / 3600000)
@@ -245,13 +287,6 @@ export function ConsultantDetailPage() {
     await updateDoc(doc(db, 'consultants', id), { [key]: updated })
     if (type === 'sykemeldt') setSykemeldtPerioder(updated)
     else setPermittertPerioder(updated)
-  }
-
-  async function addLedigPeriod(fra: string, til: string | null) {
-    if (!id || !fra) return
-    const updated = [...ledigPerioder, { fra, til }].sort((a, b) => b.fra.localeCompare(a.fra))
-    await updateDoc(doc(db, 'consultants', id), { ledigPerioder: updated })
-    setLedigPerioder(updated)
   }
 
   async function removeLedigPeriod(index: number) {
@@ -451,40 +486,66 @@ export function ConsultantDetailPage() {
             )
           })()}
 
-          {/* Ledigperioder */}
-          {(() => {
-            const isActive = isLedigNow(ledigPerioder)
+          {/* Ledigstatistikk — beregnet */}
+          {!isInternal && (() => {
+            const utenProsjektDager = sumPeriodDays(ledigPerioder)
+            const sykeDager = sumPeriodDays(sykemeldtPerioder)
+            const permDager = sumPeriodDays(permittertPerioder)
+            const totalDager = totalLedigUnionDays(ledigPerioder, sykemeldtPerioder, permittertPerioder)
+            const isLedigNå = isLedigNow(ledigPerioder)
+            const isSykeNå = isActiveNow(sykemeldtPerioder)
+            const isPermNå = isActiveNow(permittertPerioder)
+            const harData = totalDager > 0
+
             return (
-              <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ledigperioder</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                      {isActive ? 'Aktiv nå' : ledigPerioder.length > 0 ? `${ledigPerioder.length} historiske periode${ledigPerioder.length !== 1 ? 'r' : ''}` : 'Ingen registrerte perioder'}
-                    </p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ikke-billable tid</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Beregnet fra sykemelding, permisjon og perioder uten prosjekt</p>
                   </div>
-                  {isActive && (
-                    <span className="text-xs font-semibold bg-emerald-200 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-full flex-shrink-0">Ledig</span>
+                  {harData && (
+                    <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums flex-shrink-0">{formatDays(totalDager)}</span>
                   )}
                 </div>
 
+                {harData ? (
+                  <div className="grid grid-cols-3 gap-2 border-t border-gray-100 dark:border-gray-800 pt-3">
+                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isLedigNå ? 'bg-red-50 dark:bg-red-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Uten prosjekt</span>
+                      <span className={`text-lg font-bold tabular-nums ${isLedigNå ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(utenProsjektDager)}</span>
+                    </div>
+                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isSykeNå ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Sykemeldt</span>
+                      <span className={`text-lg font-bold tabular-nums ${isSykeNå ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(sykeDager)}</span>
+                    </div>
+                    <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-0.5 ${isPermNå ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-gray-50 dark:bg-gray-800/40'}`}>
+                      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Permittert</span>
+                      <span className={`text-lg font-bold tabular-nums ${isPermNå ? 'text-blue-600 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>{formatDays(permDager)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-gray-600 border-t border-gray-100 dark:border-gray-800 pt-3">Ingen registrert ikke-billable tid</p>
+                )}
+
                 {ledigPerioder.length > 0 && (
-                  <div className="flex flex-col gap-2 border-t border-emerald-100 dark:border-emerald-900/40 pt-3">
+                  <div className="flex flex-col gap-1.5 border-t border-gray-100 dark:border-gray-800 pt-3">
+                    <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Perioder uten prosjekt (auto-registrert)</p>
                     {ledigPerioder.map((p, i) => {
                       const ongoing = p.til === null
                       return (
                         <div key={i} className="flex items-center gap-2 text-sm">
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
+                            <span className="text-gray-700 dark:text-gray-300">{fmtShortDate(p.fra)}</span>
                             <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
-                            <span className={ongoing ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
+                            <span className={ongoing ? 'text-red-500 dark:text-red-400 font-medium' : 'text-gray-700 dark:text-gray-300'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
                             <span className="text-xs text-gray-400 dark:text-gray-600"> · {absenceDurationLabel(p)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {ongoing && (
                               <button type="button" onClick={() => endLedigPeriod(i)}
-                                className="text-xs text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 font-medium transition-colors">
-                                Avslutt i dag
+                                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 font-medium transition-colors">
+                                Avslutt
                               </button>
                             )}
                             <button type="button" onClick={() => removeLedigPeriod(i)}
@@ -497,8 +558,6 @@ export function ConsultantDetailPage() {
                     })}
                   </div>
                 )}
-
-                <AddAbsencePeriodForm onAdd={(fra, til) => addLedigPeriod(fra, til)} color="green" />
               </div>
             )
           })()}
