@@ -15,11 +15,17 @@ type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: s
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
-function ledigDays(periods: AbsencePeriod[]): number | null {
+function ledigDays(
+  ledigPerioder: AbsencePeriod[],
+  sykemeldtPerioder: AbsencePeriod[],
+  permittertPerioder: AbsencePeriod[]
+): number {
   const today = new Date().toISOString().split('T')[0]
-  const active = periods.find(p => p.fra <= today && p.til === null)
-  if (!active) return null
-  const from = new Date(active.fra + 'T00:00:00')
+  const allActive = [...ledigPerioder, ...sykemeldtPerioder, ...permittertPerioder]
+    .filter(p => p.fra <= today && (p.til === null || p.til >= today))
+  if (allActive.length === 0) return 0
+  const earliest = allActive.reduce((min, p) => p.fra < min ? p.fra : min, allActive[0].fra)
+  const from = new Date(earliest + 'T00:00:00')
   const now = new Date(); now.setHours(0, 0, 0, 0)
   return Math.round((now.getTime() - from.getTime()) / 86400000)
 }
@@ -297,7 +303,7 @@ export function DashboardPage() {
                 </div>
               ) : (
                 withoutProject.map((c, i) => {
-                  const days = ledigDays(c.ledigPerioder ?? [])
+                  const days = ledigDays(c.ledigPerioder ?? [], c.sykemeldtPerioder ?? [], c.permittertPerioder ?? [])
                   return (
                     <div
                       key={c.id}
@@ -312,11 +318,9 @@ export function DashboardPage() {
                         )}
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
                       </div>
-                      {days !== null && (
-                        <span className="text-xs font-medium text-red-500 dark:text-red-400 tabular-nums">
-                          {days === 0 ? 'Ledig i dag' : `Ledig i ${days}d`}
-                        </span>
-                      )}
+                      <span className="text-xs font-medium text-red-500 dark:text-red-400 tabular-nums">
+                        {days === 0 ? 'Ledig i dag' : `Ledig i ${days}d`}
+                      </span>
                     </div>
                   )
                 })
