@@ -61,10 +61,7 @@ function absenceDurationLabel(p: AbsencePeriod): string {
   const from = new Date(p.fra + 'T00:00:00')
   const to = new Date(toStr + 'T00:00:00')
   // Inclusive days for completed periods; elapsed days for ongoing (0 = started today)
-  const days = p.til
-    ? Math.round((to.getTime() - from.getTime()) / 86400000) + 1
-    : Math.round((to.getTime() - from.getTime()) / 86400000)
-  if (days === 0) return 'i dag'
+  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000) + 1)
   if (days < 7) return `${days}d`
   const weeks = Math.floor(days / 7)
   if (weeks < 9) return `${weeks}u`
@@ -76,7 +73,7 @@ function sumPeriodDays(periods: AbsencePeriod[]): number {
   return periods.reduce((sum, p) => {
     const fra = new Date(p.fra + 'T00:00:00')
     const til = new Date((p.til ?? today) + 'T00:00:00')
-    return sum + Math.max(0, Math.round((til.getTime() - fra.getTime()) / 86400000))
+    return sum + Math.max(1, Math.round((til.getTime() - fra.getTime()) / 86400000) + 1)
   }, 0)
 }
 
@@ -102,12 +99,12 @@ function totalLedigUnionDays(
   return merged.reduce((sum, p) => {
     const fra = new Date(p.fra + 'T00:00:00')
     const til = new Date(p.til + 'T00:00:00')
-    return sum + Math.round((til.getTime() - fra.getTime()) / 86400000)
+    return sum + Math.max(1, Math.round((til.getTime() - fra.getTime()) / 86400000) + 1)
   }, 0)
 }
 
 function formatDays(days: number): string {
-  if (days === 0) return 'i dag'
+  if (days === 0) return '1 dag'
   if (days < 7) return `${days}d`
   if (days < 60) return `${Math.floor(days / 7)}u ${days % 7 > 0 ? `${days % 7}d` : ''}`.trim()
   return `${Math.round(days / 30)} mnd`

@@ -27,7 +27,7 @@ function ledigDays(
   const earliest = allActive.reduce((min, p) => p.fra < min ? p.fra : min, allActive[0].fra)
   const from = new Date(earliest + 'T00:00:00')
   const now = new Date(); now.setHours(0, 0, 0, 0)
-  return Math.round((now.getTime() - from.getTime()) / 86400000)
+  return Math.max(1, Math.round((now.getTime() - from.getTime()) / 86400000) + 1)
 }
 
 function daysUntil(dateStr: string): number {
@@ -319,7 +319,7 @@ export function DashboardPage() {
                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
                       </div>
                       <span className="text-xs font-medium text-red-500 dark:text-red-400 tabular-nums">
-                        {days === 0 ? 'Ledig i dag' : `Ledig i ${days}d`}
+                        {`Ledig i ${days}d`}
                       </span>
                     </div>
                   )
