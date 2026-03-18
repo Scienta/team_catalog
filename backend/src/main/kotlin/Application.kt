@@ -15,7 +15,12 @@ fun Application.module() {
     initResend(config)
 
     install(CORS) {
-        anyHost() // Begrenses til faktisk domene ved produksjon
+        val allowedOrigin = System.getenv("ALLOWED_ORIGIN")
+        if (allowedOrigin.isNullOrBlank()) {
+            anyHost() // Ingen domene satt — tillat alt (kun lokalt/dev)
+        } else {
+            allowHost(allowedOrigin.removePrefix("https://").removePrefix("http://"), schemes = listOf("https", "http"))
+        }
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         allowMethod(HttpMethod.Post)
