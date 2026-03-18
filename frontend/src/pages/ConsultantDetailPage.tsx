@@ -104,7 +104,8 @@ function totalLedigUnionDays(
 }
 
 function formatDays(days: number): string {
-  if (days === 0) return '1 dag'
+  if (days === 0) return '—'
+  if (days === 1) return '1 dag'
   if (days < 7) return `${days}d`
   if (days < 60) return `${Math.floor(days / 7)}u ${days % 7 > 0 ? `${days % 7}d` : ''}`.trim()
   return `${Math.round(days / 30)} mnd`
