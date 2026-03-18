@@ -4,7 +4,14 @@ import { useNavigate } from 'react-router-dom'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { db } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; clientId?: string }
+type AbsencePeriod = { fra: string; til: string | null }
+
+function isActiveNow(periods: AbsencePeriod[]): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
+}
+
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; contractStart?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -33,8 +40,8 @@ export function DashboardPage() {
 
   // Exclude internal employees from all stats
   const externalConsultants = consultants.filter((c) => !c.isInternal)
-  const sykemeldte = externalConsultants.filter((c) => c.sykemeldt).sort((a, b) => a.name.localeCompare(b.name))
-  const permitterte = externalConsultants.filter((c) => c.permittert).sort((a, b) => a.name.localeCompare(b.name))
+  const sykemeldte = externalConsultants.filter(c => isActiveNow(c.sykemeldtPerioder ?? []) || (!c.sykemeldtPerioder && c.sykemeldt)).sort((a, b) => a.name.localeCompare(b.name))
+  const permitterte = externalConsultants.filter(c => isActiveNow(c.permittertPerioder ?? []) || (!c.permittertPerioder && c.permittert)).sort((a, b) => a.name.localeCompare(b.name))
 
   const inAnyProject = new Set(projects.flatMap((p) => p.consultantIds ?? []))
 
@@ -319,7 +326,16 @@ export function DashboardPage() {
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
                     )}
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                      {(() => {
+                        const periods = c.sykemeldtPerioder ?? []
+                        const today = new Date().toISOString().split('T')[0]
+                        const active = periods.find(p => p.fra <= today && (p.til === null || p.til >= today))
+                        if (!active) return null
+                        return <p className="text-xs text-amber-600 dark:text-amber-500">Siden {new Date(active.fra).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      })()}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -347,7 +363,16 @@ export function DashboardPage() {
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-400 text-xs font-semibold flex-shrink-0">{c.name?.charAt(0)}</div>
                     )}
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{c.name}</span>
+                      {(() => {
+                        const periods = c.permittertPerioder ?? []
+                        const today = new Date().toISOString().split('T')[0]
+                        const active = periods.find(p => p.fra <= today && (p.til === null || p.til >= today))
+                        if (!active) return null
+                        return <p className="text-xs text-blue-600 dark:text-blue-500">Siden {new Date(active.fra).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      })()}
+                    </div>
                   </div>
                 ))}
               </div>

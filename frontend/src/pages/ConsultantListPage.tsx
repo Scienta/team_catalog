@@ -4,7 +4,14 @@ import { getIdToken } from 'firebase/auth'
 import { useNavigate } from 'react-router-dom'
 import { db, auth } from '../firebase'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; clientId?: string; technologies?: string[]; projectCustomers?: string[]; employers?: string[]; schools?: string[] }
+type AbsencePeriod = { fra: string; til: string | null }
+
+function isActiveNow(periods: AbsencePeriod[]): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
+}
+
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; clientId?: string; technologies?: string[]; projectCustomers?: string[]; employers?: string[]; schools?: string[] }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string }
 
@@ -255,8 +262,16 @@ export function ConsultantListPage() {
         {/* Name */}
         <div className="text-center w-full">
           <p className={`text-sm font-semibold leading-tight ${alert ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{c.name}</p>
-          {c.sykemeldt && <span className="inline-block mt-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">Sykemeldt</span>}
-          {c.permittert && !c.sykemeldt && <span className="inline-block mt-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full">Permittert</span>}
+          {(() => {
+            const isSykemeldt = isActiveNow(c.sykemeldtPerioder ?? []) || (!c.sykemeldtPerioder && c.sykemeldt)
+            const isPermittert = isActiveNow(c.permittertPerioder ?? []) || (!c.permittertPerioder && c.permittert)
+            return (
+              <>
+                {isSykemeldt && <span className="inline-block mt-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">Sykemeldt</span>}
+                {isPermittert && !isSykemeldt && <span className="inline-block mt-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded-full">Permittert</span>}
+              </>
+            )
+          })()}
           {c.isInternal
             ? <p className="text-xs text-gray-300 dark:text-gray-700 mt-0.5">Intern</p>
             : alert

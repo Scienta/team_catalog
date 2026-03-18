@@ -4,7 +4,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { db } from '../firebase'
 import { writeAuditLog } from '../lib/auditLog'
 
-type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; clientId?: string }
+type AbsencePeriod = { fra: string; til: string | null }
+
+function isActiveNow(periods: AbsencePeriod[]): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
+}
+
+type Consultant = { id: string; name: string; photoUrl?: string; contractEnd?: string; isInternal?: boolean; sykemeldt?: boolean; permittert?: boolean; sykemeldtPerioder?: AbsencePeriod[]; permittertPerioder?: AbsencePeriod[]; clientId?: string }
 type Project = { id: string; name: string; clientId: string; consultantIds?: string[] }
 type Client = { id: string; name: string; logoUrl?: string; contactPhotoUrl?: string; contactName?: string; slackChannel?: string }
 
@@ -292,27 +299,29 @@ function ConnectedRow({ items }: { items: React.ReactNode[] }) {
 }
 
 function ConsultantNode({ consultant, onClick }: { consultant: Consultant; onClick: () => void }) {
+  const isSykemeldt = isActiveNow(consultant.sykemeldtPerioder ?? []) || (!consultant.sykemeldtPerioder && consultant.sykemeldt)
+  const isPermittert = isActiveNow(consultant.permittertPerioder ?? []) || (!consultant.permittertPerioder && consultant.permittert)
   return (
     <div onClick={onClick} className="flex flex-col items-center gap-1.5 cursor-pointer group w-20">
       <div className="relative">
         {consultant.photoUrl ? (
-          <img src={consultant.photoUrl} alt={consultant.name} className={`w-12 h-12 rounded-full object-cover ring-2 ring-white dark:ring-gray-900 shadow-sm group-hover:ring-gray-300 dark:group-hover:ring-gray-600 transition-all ${consultant.sykemeldt ? 'opacity-60' : ''}`} />
+          <img src={consultant.photoUrl} alt={consultant.name} className={`w-12 h-12 rounded-full object-cover ring-2 ring-white dark:ring-gray-900 shadow-sm group-hover:ring-gray-300 dark:group-hover:ring-gray-600 transition-all ${isSykemeldt ? 'opacity-60' : ''}`} />
         ) : (
-          <div className={`w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm font-semibold text-gray-500 dark:text-gray-400 ring-2 ring-white dark:ring-gray-900 shadow-sm group-hover:ring-gray-300 transition-all ${consultant.sykemeldt ? 'opacity-60' : ''}`}>
+          <div className={`w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm font-semibold text-gray-500 dark:text-gray-400 ring-2 ring-white dark:ring-gray-900 shadow-sm group-hover:ring-gray-300 transition-all ${isSykemeldt ? 'opacity-60' : ''}`}>
             {consultant.name?.charAt(0)}
           </div>
         )}
-        {consultant.sykemeldt && (
+        {isSykemeldt && (
           <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-amber-400 border-2 border-white dark:border-gray-900 flex items-center justify-center text-[8px] leading-none">🤒</span>
         )}
-        {consultant.permittert && !consultant.sykemeldt && (
+        {isPermittert && !isSykemeldt && (
           <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-blue-400 border-2 border-white dark:border-gray-900 flex items-center justify-center text-[8px] leading-none">🏠</span>
         )}
       </div>
       <div className="flex flex-col items-center gap-0.5 w-full">
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300 text-center leading-tight line-clamp-2 w-full">{consultant.name}</span>
-        {consultant.sykemeldt && <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">Sykemeldt</span>}
-        {consultant.permittert && !consultant.sykemeldt && <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Permittert</span>}
+        {isSykemeldt && <span className="text-[9px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">Sykemeldt</span>}
+        {isPermittert && !isSykemeldt && <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Permittert</span>}
         {consultant.contractEnd && <ContractBadge contractEnd={consultant.contractEnd} />}
       </div>
     </div>

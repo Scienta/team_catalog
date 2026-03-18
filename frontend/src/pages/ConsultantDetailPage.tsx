@@ -4,18 +4,16 @@ import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firesto
 import { getIdToken } from 'firebase/auth'
 import { db, auth } from '../firebase'
 
+type AbsencePeriod = { fra: string; til: string | null }
+
 type Consultant = {
   name: string
   photoUrl?: string
   email?: string
   telephone?: string
   isInternal?: boolean
-  sykemeldt?: boolean
-  sykemeldtFra?: string
-  sykemeldtTil?: string
-  permittert?: boolean
-  permittertFra?: string
-  permittertTil?: string
+  sykemeldtPerioder?: AbsencePeriod[]
+  permittertPerioder?: AbsencePeriod[]
   contractStart?: string
   contractEnd?: string
   warningDays?: number
@@ -41,6 +39,25 @@ type CVData = {
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']
 
+function isActiveNow(periods: AbsencePeriod[]): boolean {
+  const today = new Date().toISOString().split('T')[0]
+  return periods.some(p => p.fra <= today && (p.til === null || p.til >= today))
+}
+
+function fmtShortDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function absenceDurationLabel(p: AbsencePeriod): string {
+  const from = new Date(p.fra)
+  const to = p.til ? new Date(p.til) : new Date()
+  const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86400000) + 1)
+  if (days < 7) return `${days}d`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 9) return `${weeks}u`
+  return `${Math.round(days / 30)} mnd`
+}
+
 function fmtRelative(date: Date): string {
   const diff = Date.now() - date.getTime()
   const h = Math.floor(diff / 3600000)
@@ -63,6 +80,54 @@ function PeriodBadge({ yFrom, mFrom, yTo, mTo }: { yFrom?: number; mFrom?: numbe
   return <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">{label}</span>
 }
 
+function AddAbsencePeriodForm({ onAdd, color }: { onAdd: (fra: string, til: string | null) => void; color: 'amber' | 'blue' }) {
+  const today = new Date().toISOString().split('T')[0]
+  const [open, setOpen] = useState(false)
+  const [fra, setFra] = useState(today)
+  const [til, setTil] = useState('')
+
+  const inputCls = `border rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 w-full ${
+    color === 'amber' ? 'border-amber-200 dark:border-amber-800 focus:ring-amber-400' : 'border-blue-200 dark:border-blue-800 focus:ring-blue-400'
+  }`
+  const btnCls = `text-xs font-medium px-3 py-1.5 rounded-lg transition-colors ${
+    color === 'amber' ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
+  }`
+
+  if (!open) return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className={`text-xs font-medium flex items-center gap-1.5 transition-colors ${color === 'amber' ? 'text-amber-700 dark:text-amber-400 hover:text-amber-900' : 'text-blue-700 dark:text-blue-400 hover:text-blue-900'}`}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Legg til periode
+    </button>
+  )
+
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex flex-col gap-1">
+          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Fra</label>
+          <input type="date" value={fra} onChange={(e) => setFra(e.target.value)} className={inputCls} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className={`text-xs font-medium uppercase tracking-wider ${color === 'amber' ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}`}>Til (tom = pågående)</label>
+          <input type="date" value={til} onChange={(e) => setTil(e.target.value)} className={inputCls} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => { onAdd(fra, til || null); setOpen(false); setFra(today); setTil('') }} disabled={!fra} className={btnCls}>
+          Legg til
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setFra(today); setTil('') }} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+          Avbryt
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ConsultantDetailPage() {
   const { id } = useParams<{ id: string }>()
 
@@ -74,12 +139,8 @@ export function ConsultantDetailPage() {
   const [cvLoading, setCvLoading] = useState(true)
 
   const [isInternal, setIsInternal] = useState(false)
-  const [isSykemeldt, setIsSykemeldt] = useState(false)
-  const [sykemeldtFra, setSykemeldtFra] = useState('')
-  const [sykemeldtTil, setSykemeldtTil] = useState('')
-  const [isPermittert, setIsPermittert] = useState(false)
-  const [permittertFra, setPermittertFra] = useState('')
-  const [permittertTil, setPermittertTil] = useState('')
+  const [sykemeldtPerioder, setSykemeldtPerioder] = useState<AbsencePeriod[]>([])
+  const [permittertPerioder, setPermittertPerioder] = useState<AbsencePeriod[]>([])
   const [contractStart, setContractStart] = useState('')
   const [contractEnd, setContractEnd] = useState('')
   const [warningDays, setWarningDays] = useState<number | ''>('')
@@ -93,12 +154,13 @@ export function ConsultantDetailPage() {
       const data = snap.data() as Consultant
       setConsultant(data)
       setIsInternal(data.isInternal ?? false)
-      setIsSykemeldt(data.sykemeldt ?? false)
-      setSykemeldtFra(data.sykemeldtFra ?? '')
-      setSykemeldtTil(data.sykemeldtTil ?? '')
-      setIsPermittert(data.permittert ?? false)
-      setPermittertFra(data.permittertFra ?? '')
-      setPermittertTil(data.permittertTil ?? '')
+
+      const today = new Date().toISOString().split('T')[0]
+      const rawSyke = (data as any).sykemeldtPerioder as AbsencePeriod[] | undefined
+      const rawPerm = (data as any).permittertPerioder as AbsencePeriod[] | undefined
+      setSykemeldtPerioder(rawSyke ?? ((data as any).sykemeldt ? [{ fra: (data as any).sykemeldtFra ?? today, til: (data as any).sykemeldtTil ?? null }] : []))
+      setPermittertPerioder(rawPerm ?? ((data as any).permittert ? [{ fra: (data as any).permittertFra ?? today, til: (data as any).permittertTil ?? null }] : []))
+
       setContractStart(data.contractStart ?? '')
       setContractEnd(data.contractEnd ?? '')
       setWarningDays(data.warningDays ?? '')
@@ -128,12 +190,6 @@ export function ConsultantDetailPage() {
     setSaving(true)
     await updateDoc(doc(db, 'consultants', id), {
       isInternal,
-      sykemeldt: isSykemeldt,
-      sykemeldtFra: isSykemeldt ? (sykemeldtFra || null) : null,
-      sykemeldtTil: isSykemeldt ? (sykemeldtTil || null) : null,
-      permittert: isPermittert,
-      permittertFra: isPermittert ? (permittertFra || null) : null,
-      permittertTil: isPermittert ? (permittertTil || null) : null,
       contractStart: contractStart || null,
       contractEnd: contractEnd || null,
       warningDays: warningDays !== '' ? warningDays : null,
@@ -143,6 +199,37 @@ export function ConsultantDetailPage() {
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function addAbsencePeriod(type: 'sykemeldt' | 'permittert', fra: string, til: string | null) {
+    if (!id || !fra) return
+    const key = type === 'sykemeldt' ? 'sykemeldtPerioder' : 'permittertPerioder'
+    const current = type === 'sykemeldt' ? sykemeldtPerioder : permittertPerioder
+    const updated = [...current, { fra, til }].sort((a, b) => b.fra.localeCompare(a.fra))
+    await updateDoc(doc(db, 'consultants', id), { [key]: updated })
+    if (type === 'sykemeldt') setSykemeldtPerioder(updated)
+    else setPermittertPerioder(updated)
+  }
+
+  async function removeAbsencePeriod(type: 'sykemeldt' | 'permittert', index: number) {
+    if (!id) return
+    const key = type === 'sykemeldt' ? 'sykemeldtPerioder' : 'permittertPerioder'
+    const current = type === 'sykemeldt' ? sykemeldtPerioder : permittertPerioder
+    const updated = current.filter((_, i) => i !== index)
+    await updateDoc(doc(db, 'consultants', id), { [key]: updated })
+    if (type === 'sykemeldt') setSykemeldtPerioder(updated)
+    else setPermittertPerioder(updated)
+  }
+
+  async function endAbsencePeriod(type: 'sykemeldt' | 'permittert', index: number) {
+    if (!id) return
+    const today = new Date().toISOString().split('T')[0]
+    const key = type === 'sykemeldt' ? 'sykemeldtPerioder' : 'permittertPerioder'
+    const current = type === 'sykemeldt' ? sykemeldtPerioder : permittertPerioder
+    const updated = current.map((p, i) => i === index ? { ...p, til: today } : p)
+    await updateDoc(doc(db, 'consultants', id), { [key]: updated })
+    if (type === 'sykemeldt') setSykemeldtPerioder(updated)
+    else setPermittertPerioder(updated)
   }
 
   function toggleNotifyAdmin(uid: string) {
@@ -223,63 +310,109 @@ export function ConsultantDetailPage() {
             </button>
           </div>
 
-          {/* Sykemeldt */}
-          <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isSykemeldt ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Sykemeldt</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Vises på dashboard og board</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsSykemeldt(!isSykemeldt)}
-                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isSykemeldt ? 'bg-amber-500' : 'bg-gray-200 dark:bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isSykemeldt ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-            {isSykemeldt && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Fra</label>
-                  <input type="date" value={sykemeldtFra} onChange={(e) => setSykemeldtFra(e.target.value)} className="border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
+          {/* Sykmeldingsperioder */}
+          {(() => {
+            const isActive = isActiveNow(sykemeldtPerioder)
+            return (
+              <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isActive ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Sykmeldingsperioder</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                      {isActive ? 'Aktiv nå' : sykemeldtPerioder.length > 0 ? `${sykemeldtPerioder.length} historiske periode${sykemeldtPerioder.length !== 1 ? 'r' : ''}` : 'Ingen registrerte perioder'}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <span className="text-xs font-semibold bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 px-2.5 py-1 rounded-full flex-shrink-0">Sykemeldt</span>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Til</label>
-                  <input type="date" value={sykemeldtTil} onChange={(e) => setSykemeldtTil(e.target.value)} className="border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-amber-400 w-full" />
-                </div>
-              </div>
-            )}
-          </div>
 
-          {/* Permittert */}
-          <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isPermittert ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Permittert</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Vises på dashboard og board</p>
+                {sykemeldtPerioder.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t border-amber-100 dark:border-amber-900/40 pt-3">
+                    {sykemeldtPerioder.map((p, i) => {
+                      const ongoing = p.til === null
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
+                            <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
+                            <span className={ongoing ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-600 ml-2">{absenceDurationLabel(p)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {ongoing && (
+                              <button type="button" onClick={() => endAbsencePeriod('sykemeldt', i)}
+                                className="text-xs text-amber-700 dark:text-amber-400 hover:text-amber-900 font-medium transition-colors">
+                                Avslutt i dag
+                              </button>
+                            )}
+                            <button type="button" onClick={() => removeAbsencePeriod('sykemeldt', i)}
+                              className="w-5 h-5 rounded flex items-center justify-center text-gray-300 dark:text-gray-700 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <AddAbsencePeriodForm onAdd={(fra, til) => addAbsencePeriod('sykemeldt', fra, til)} color="amber" />
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPermittert(!isPermittert)}
-                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isPermittert ? 'bg-blue-500' : 'bg-gray-200 dark:bg-gray-700'}`}
-              >
-                <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${isPermittert ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-            {isPermittert && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wider">Fra</label>
-                  <input type="date" value={permittertFra} onChange={(e) => setPermittertFra(e.target.value)} className="border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-blue-400 w-full" />
+            )
+          })()}
+
+          {/* Permisjonsperioder */}
+          {(() => {
+            const isActive = isActiveNow(permittertPerioder)
+            return (
+              <div className={`rounded-2xl border shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-[#1a1a1a] border-gray-100 dark:border-gray-800'}`}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Permisjonsperioder</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                      {isActive ? 'Aktiv nå' : permittertPerioder.length > 0 ? `${permittertPerioder.length} historiske periode${permittertPerioder.length !== 1 ? 'r' : ''}` : 'Ingen registrerte perioder'}
+                    </p>
+                  </div>
+                  {isActive && (
+                    <span className="text-xs font-semibold bg-blue-200 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 px-2.5 py-1 rounded-full flex-shrink-0">Permittert</span>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wider">Til</label>
-                  <input type="date" value={permittertTil} onChange={(e) => setPermittertTil(e.target.value)} className="border border-blue-200 dark:border-blue-800 rounded-xl px-3 py-2 text-sm text-gray-800 dark:text-gray-200 bg-white/70 dark:bg-[#222] focus:outline-none focus:ring-2 focus:ring-blue-400 w-full" />
-                </div>
+
+                {permittertPerioder.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t border-blue-100 dark:border-blue-900/40 pt-3">
+                    {permittertPerioder.map((p, i) => {
+                      const ongoing = p.til === null
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{fmtShortDate(p.fra)}</span>
+                            <span className="text-gray-400 dark:text-gray-600 mx-1">–</span>
+                            <span className={ongoing ? 'text-blue-600 dark:text-blue-400 font-medium' : 'text-gray-800 dark:text-gray-200'}>{ongoing ? 'pågående' : fmtShortDate(p.til!)}</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-600 ml-2">{absenceDurationLabel(p)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {ongoing && (
+                              <button type="button" onClick={() => endAbsencePeriod('permittert', i)}
+                                className="text-xs text-blue-700 dark:text-blue-400 hover:text-blue-900 font-medium transition-colors">
+                                Avslutt i dag
+                              </button>
+                            )}
+                            <button type="button" onClick={() => removeAbsencePeriod('permittert', i)}
+                              className="w-5 h-5 rounded flex items-center justify-center text-gray-300 dark:text-gray-700 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <AddAbsencePeriodForm onAdd={(fra, til) => addAbsencePeriod('permittert', fra, til)} color="blue" />
               </div>
-            )}
-          </div>
+            )
+          })()}
 
           {!isInternal && (
             <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors">
