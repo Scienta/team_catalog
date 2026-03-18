@@ -101,10 +101,16 @@ fun Application.configureRouting(config: AppConfig) {
                     ?.distinct()
                     ?: emptyList()
 
+                val rawPhotoUrl = photoUrls[user.id]
+                val photoUrl: Any = when {
+                    rawPhotoUrl.isNullOrBlank() -> FieldValue.delete()
+                    rawPhotoUrl.startsWith("/") -> "https://scienta.flowcase.com$rawPhotoUrl"
+                    else -> rawPhotoUrl
+                }
                 val data = mapOf(
                     "flowcaseId" to user.id,
                     "name" to user.name,
-                    "photoUrl" to (photoUrls[user.id] ?: ""),
+                    "photoUrl" to photoUrl,
                     "email" to (user.email ?: ""),
                     "telephone" to (user.telephone ?: ""),
                     "defaultCvId" to (user.default_cv_id ?: ""),
