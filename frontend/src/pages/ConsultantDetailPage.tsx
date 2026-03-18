@@ -107,7 +107,7 @@ function totalLedigUnionDays(
 }
 
 function formatDays(days: number): string {
-  if (days === 0) return '0d'
+  if (days === 0) return 'i dag'
   if (days < 7) return `${days}d`
   if (days < 60) return `${Math.floor(days / 7)}u ${days % 7 > 0 ? `${days % 7}d` : ''}`.trim()
   return `${Math.round(days / 30)} mnd`
@@ -495,7 +495,7 @@ export function ConsultantDetailPage() {
             const isLedigNå = isLedigNow(ledigPerioder)
             const isSykeNå = isActiveNow(sykemeldtPerioder)
             const isPermNå = isActiveNow(permittertPerioder)
-            const harData = totalDager > 0
+            const harData = ledigPerioder.length > 0 || sykemeldtPerioder.length > 0 || permittertPerioder.length > 0
 
             return (
               <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-5 py-4 flex flex-col gap-3 transition-colors">
