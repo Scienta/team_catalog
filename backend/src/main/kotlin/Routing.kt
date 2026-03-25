@@ -8,6 +8,7 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
+import io.ktor.server.http.content.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -78,6 +79,10 @@ fun Application.configureRouting(config: AppConfig) {
         }
     }
     routing {
+        singlePageApplication {
+            filesPath = "static"
+        }
+
         get("/health") {
             call.respond(HealthResponse("ok"))
         }

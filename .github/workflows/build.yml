@@ -1,4 +1,4 @@
-name: Build and push Docker images
+name: Build and push Docker image
 
 on:
   push:
@@ -8,7 +8,7 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  backend:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,43 +25,21 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ env.REGISTRY }}/scienta/team_catalog-backend
+          images: ${{ env.REGISTRY }}/scienta/team_catalog
           tags: |
             type=sha
             type=raw,value=latest
 
       - uses: docker/build-push-action@v6
         with:
-          context: backend
+          context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-  frontend:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ${{ env.REGISTRY }}/scienta/team_catalog-frontend
-          tags: |
-            type=sha
-            type=raw,value=latest
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: frontend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+            VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+            VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+            VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}

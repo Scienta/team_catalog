@@ -14,17 +14,15 @@ fun Application.module() {
     initFirebase(config)
     initResend(config)
 
-    install(CORS) {
-        val allowedOrigin = System.getenv("ALLOWED_ORIGIN")
-        if (allowedOrigin.isNullOrBlank()) {
-            anyHost() // Ingen domene satt — tillat alt (kun lokalt/dev)
-        } else {
+    val allowedOrigin = System.getenv("ALLOWED_ORIGIN")
+    if (!allowedOrigin.isNullOrBlank()) {
+        install(CORS) {
             allowHost(allowedOrigin.removePrefix("https://").removePrefix("http://"), schemes = listOf("https", "http"))
+            allowHeader(HttpHeaders.Authorization)
+            allowHeader(HttpHeaders.ContentType)
+            allowMethod(HttpMethod.Post)
+            allowMethod(HttpMethod.Get)
         }
-        allowHeader(HttpHeaders.Authorization)
-        allowHeader(HttpHeaders.ContentType)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Get)
     }
 
     configureSerialization()
