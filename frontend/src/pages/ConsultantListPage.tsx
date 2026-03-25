@@ -126,7 +126,7 @@ export function ConsultantListPage() {
     setSyncing(true); setSyncMsg('')
     try {
       const token = await getIdToken(auth.currentUser!)
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/sync`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/sync`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) throw new Error()
       const { synced } = await res.json()
       setSyncMsg(`${synced} synkronisert`)

@@ -29,7 +29,7 @@ export function useAuth(): AuthState {
 
         // Not yet an admin — check if there's a pending invite and promote
         const token = await getIdToken(user)
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/promote`, {
+        const res = await fetch(`/auth/promote`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         })

@@ -16,7 +16,7 @@ function DevTools() {
     setTestEmailStatus('loading')
     try {
       const token = await getIdToken(auth.currentUser!)
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/test-email`, {
+      const res = await fetch(`/test-email`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: testEmail }),
@@ -31,7 +31,7 @@ function DevTools() {
     setCheckStatus({ state: 'loading' })
     try {
       const token = await getIdToken(auth.currentUser!)
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/check-contracts?date=${checkDate}`, {
+      const res = await fetch(`/check-contracts?date=${checkDate}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -149,7 +149,7 @@ export function AdminsPage() {
     setAdding(consultant.id)
     try {
       const token = await getIdToken(auth.currentUser!)
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/lookup-user`, {
+      const res = await fetch(`/admin/lookup-user`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: consultant.email }),

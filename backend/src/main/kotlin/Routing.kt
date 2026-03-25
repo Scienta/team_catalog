@@ -87,6 +87,16 @@ fun Application.configureRouting(config: AppConfig) {
             call.respond(HealthResponse("ok"))
         }
 
+        get("/config") {
+            call.respond(mapOf(
+                "apiKey" to config.firebaseApiKey,
+                "authDomain" to config.firebaseAuthDomain,
+                "projectId" to config.firebaseProjectId,
+                "messagingSenderId" to config.firebaseMessagingSenderId,
+                "appId" to config.firebaseAppId
+            ))
+        }
+
         get("/public/available-consultants") {
             val apiKey = call.request.headers["X-Api-Key"]
             if (apiKey.isNullOrBlank() || apiKey != config.publicApiKey || config.publicApiKey.isBlank()) {

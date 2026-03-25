@@ -195,7 +195,7 @@ export function ConsultantDetailPage() {
     async function loadCV() {
       try {
         const token = await getIdToken(auth.currentUser!)
-        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/cv/${id}`, {
+        const res = await fetch(`/cv/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.ok) setCv(await res.json())
