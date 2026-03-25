@@ -53,6 +53,16 @@ data class CVTechGroup(val label: String?, val tags: List<String>)
 data class CVKeyQual(val label: String?, val description: String?)
 
 @Serializable
+data class AvailableConsultant(
+    val name: String,
+    val technologies: List<String>,
+    val availableFrom: String?  // null = currently available, ISO date = available from that date
+)
+
+@Serializable
+data class AvailableConsultantsResponse(val consultants: List<AvailableConsultant>)
+
+@Serializable
 data class ConsultantCVResponse(
     val workExperience: List<CVWorkEntry>,
     val projectExperience: List<CVProjectEntry>,
@@ -70,6 +80,54 @@ fun Application.configureRouting(config: AppConfig) {
     routing {
         get("/health") {
             call.respond(HealthResponse("ok"))
+        }
+
+        get("/public/available-consultants") {
+            val apiKey = call.request.headers["X-Api-Key"]
+            if (apiKey.isNullOrBlank() || apiKey != config.publicApiKey || config.publicApiKey.isBlank()) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid or missing API key")
+                return@get
+            }
+
+            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+            val fmt = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+
+            val firestore = getFirestore()
+            val adminDocs = firestore.collection("admins").get().get().documents
+            val adminEmails = adminDocs.flatMap { doc ->
+                // Get email from Firestore doc field
+                val firestoreEmail = doc.getString("email")?.lowercase()
+                // Also get email from Firebase Auth (more reliable)
+                val authEmail = runCatching {
+                    FirebaseAuth.getInstance().getUser(doc.id).email?.lowercase()
+                }.getOrNull()
+                listOfNotNull(firestoreEmail, authEmail)
+            }.toSet()
+
+            val docs = firestore.collection("consultants").get().get().documents
+            val available = docs.mapNotNull { doc ->
+                val email = doc.getString("email")?.lowercase() ?: ""
+                if (email.isNotBlank() && email in adminEmails) return@mapNotNull null
+                if (doc.getBoolean("isInternal") == true) return@mapNotNull null
+                val name = doc.getString("name") ?: return@mapNotNull null
+                val contractEnd = doc.getString("contractEnd")
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { java.time.LocalDate.parse(it, fmt) }.getOrNull() }
+
+                val availableFrom: String? = when {
+                    contractEnd == null -> null                  // no assignment — available now
+                    contractEnd <= today -> null                 // contract ended — available now
+                    contractEnd > today -> contractEnd.toString() // future end — available from this date
+                    else -> return@mapNotNull null
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                val technologies = (doc.get("technologies") as? List<String>) ?: emptyList()
+
+                AvailableConsultant(name = name, technologies = technologies, availableFrom = availableFrom)
+            }.sortedWith(compareBy(nullsFirst()) { it.availableFrom })
+
+            call.respond(AvailableConsultantsResponse(available))
         }
 
         post("/sync") {
@@ -322,7 +380,7 @@ fun Application.configureRouting(config: AppConfig) {
                 parsed
             }
 
-            val notified = checkAndNotifyContracts(overrideDate, config.appUrl)
+            val notified = checkAndNotifyContracts(overrideDate, config.appUrl, config.emailFrom)
             val usedDate = (overrideDate ?: java.time.LocalDate.now(java.time.ZoneOffset.UTC)).toString()
             call.respond(CheckContractsResponse(notified, usedDate))
         }
@@ -332,7 +390,7 @@ fun Application.configureRouting(config: AppConfig) {
 
             val body = call.receive<TestEmailRequest>()
             val emailRequest = com.resend.services.emails.model.CreateEmailOptions.builder()
-                .from("onboarding@resend.dev")
+                .from(config.emailFrom)
                 .to(listOf(body.to))
                 .subject("Test-epost fra Konsulent Admin")
                 .html(testEmail())

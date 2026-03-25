@@ -6,7 +6,9 @@ data class AppConfig(
     val firebaseProjectId: String,
     val firebaseServiceAccountJson: String,
     val schedulerSecret: String,
-    val appUrl: String = ""
+    val appUrl: String = "",
+    val emailFrom: String = "onboarding@resend.dev",
+    val publicApiKey: String = ""
 )
 
 fun loadConfig(): AppConfig {
@@ -19,6 +21,8 @@ fun loadConfig(): AppConfig {
         firebaseProjectId = requireEnv("FIREBASE_PROJECT_ID"),
         firebaseServiceAccountJson = requireEnv("FIREBASE_SERVICE_ACCOUNT_JSON"),
         schedulerSecret = requireEnv("SCHEDULER_SECRET"),
-        appUrl = System.getenv("APP_URL") ?: ""
+        appUrl = System.getenv("APP_URL") ?: "",
+        emailFrom = System.getenv("EMAIL_FROM") ?: "onboarding@resend.dev",
+        publicApiKey = System.getenv("PUBLIC_API_KEY") ?: ""
     )
 }

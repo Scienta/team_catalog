@@ -5,7 +5,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: String = ""): Int {
+suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: String = "", emailFrom: String = "onboarding@resend.dev"): Int {
     val firestore = getFirestore()
     val today = overrideDate ?: LocalDate.now(ZoneOffset.UTC)
     val fmt = DateTimeFormatter.ISO_LOCAL_DATE
@@ -63,7 +63,7 @@ suspend fun checkAndNotifyContracts(overrideDate: LocalDate? = null, appUrl: Str
         if (recipients.isEmpty()) continue
 
         val emailRequest = CreateEmailOptions.builder()
-            .from("onboarding@resend.dev")
+            .from(emailFrom)
             .to(recipients)
             .subject("Kontraktsvarsel: $name utløper om $warningDays dager")
             .html(contractWarningEmail(name, clientStr, contractEndFormatted, warningDays, appUrl))

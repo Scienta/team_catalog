@@ -33,6 +33,12 @@ ktor {
     }
 }
 
+afterEvaluate {
+    tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+        mergeServiceFiles()
+    }
+}
+
 dependencies {
     // Ktor server
     implementation(libs.ktor.server.core)
