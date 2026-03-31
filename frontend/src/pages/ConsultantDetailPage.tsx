@@ -22,6 +22,9 @@ type Consultant = {
   notifyAll?: boolean
   notifyList?: string[]
   lastSyncedAt?: { seconds: number; nanoseconds: number }
+  monthlySalary?: number
+  hourlyRate?: number
+  fixedMonthlyCosts?: number
 }
 
 type Admin = { id: string; name: string; email: string }
@@ -91,6 +94,36 @@ function fmtPeriod(yFrom?: number, mFrom?: number, yTo?: number, mTo?: number): 
   const to = yTo ? (mTo ? `${MONTHS[mTo - 1]} ${yTo}` : `${yTo}`) : 'nå'
   if (!from) return ''
   return `${from} – ${to}`
+}
+
+function norwegianWorkingDays(year: number): number {
+  // Fixed-date holidays
+  const fixed = [`${year}-01-01`, `${year}-05-01`, `${year}-05-17`, `${year}-12-25`, `${year}-12-26`]
+  // Easter-based holidays (Anonymous Gregorian algorithm)
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4), k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  const easter = new Date(year, month, day)
+  const easterDay = (dd: number) => { const d = new Date(easter); d.setDate(d.getDate() + dd); return d.toISOString().split('T')[0] }
+  const easterHolidays = [easterDay(-3), easterDay(-2), easterDay(0), easterDay(1), easterDay(39), easterDay(49), easterDay(50)]
+  const holidays = new Set([...fixed, ...easterHolidays])
+  let count = 0
+  const d0 = new Date(year, 0, 1)
+  const dEnd = new Date(year, 11, 31)
+  for (let dt = new Date(d0); dt <= dEnd; dt.setDate(dt.getDate() + 1)) {
+    const dow = dt.getDay()
+    if (dow !== 0 && dow !== 6 && !holidays.has(dt.toISOString().split('T')[0])) count++
+  }
+  return count
+}
+
+function fmtNok(n: number): string {
+  return n.toLocaleString('nb-NO', { maximumFractionDigits: 0 }) + ' kr'
 }
 
 function PeriodBadge({ yFrom, mFrom, yTo, mTo }: { yFrom?: number; mFrom?: number; yTo?: number; mTo?: number }) {
@@ -167,6 +200,9 @@ export function ConsultantDetailPage() {
   const [warningDays, setWarningDays] = useState<number | ''>('')
   const [notifyAll, setNotifyAll] = useState(true)
   const [notifyList, setNotifyList] = useState<string[]>([])
+  const [monthlySalary, setMonthlySalary] = useState<number | ''>('')
+  const [hourlyRate, setHourlyRate] = useState<number | ''>('')
+  const [fixedMonthlyCosts, setFixedMonthlyCosts] = useState<number | ''>('')
 
   useEffect(() => {
     if (!id) return
@@ -188,6 +224,9 @@ export function ConsultantDetailPage() {
       setWarningDays(data.warningDays ?? '')
       setNotifyAll(data.notifyAll ?? true)
       setNotifyList(data.notifyList ?? [])
+      setMonthlySalary(data.monthlySalary ?? '')
+      setHourlyRate(data.hourlyRate ?? '')
+      setFixedMonthlyCosts(data.fixedMonthlyCosts ?? '')
     })
     const u1 = onSnapshot(collection(db, 'admins'), (s) => setAdmins(s.docs.map((d) => ({ id: d.id, ...d.data() } as Admin))))
 
@@ -217,6 +256,9 @@ export function ConsultantDetailPage() {
       warningDays: warningDays !== '' ? warningDays : null,
       notifyAll,
       notifyList: notifyAll ? [] : notifyList,
+      monthlySalary: monthlySalary !== '' ? monthlySalary : null,
+      hourlyRate: hourlyRate !== '' ? hourlyRate : null,
+      fixedMonthlyCosts: fixedMonthlyCosts !== '' ? fixedMonthlyCosts : null,
     })
     setSaving(false)
     setSaved(true)
@@ -697,6 +739,84 @@ export function ConsultantDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Økonomi & Prognose */}
+          {!isInternal && (() => {
+            const currentYear = new Date().getFullYear()
+            const workDays = norwegianWorkingDays(currentYear)
+            const annualRevenue = hourlyRate !== '' ? hourlyRate * workDays * 7.5 : null
+            const annualSalary = monthlySalary !== '' ? monthlySalary * 12 : null
+            const annualFixed = fixedMonthlyCosts !== '' ? fixedMonthlyCosts * 12 : null
+            const totalCost = annualSalary !== null || annualFixed !== null ? (annualSalary ?? 0) + (annualFixed ?? 0) : null
+            const profit = annualRevenue !== null && totalCost !== null ? annualRevenue - totalCost : null
+            const margin = annualRevenue && profit !== null ? (profit / annualRevenue) * 100 : null
+
+            return (
+              <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 flex flex-col gap-5 transition-colors">
+                <div>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Økonomi & Prognose</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{currentYear} · {workDays} arbeidsdager · 7.5t/dag</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelClass}>Månedslønn</label>
+                    <input
+                      type="number" min={0} placeholder="0"
+                      value={monthlySalary}
+                      onChange={(e) => setMonthlySalary(e.target.value === '' ? '' : Number(e.target.value))}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelClass}>Timepris</label>
+                    <input
+                      type="number" min={0} placeholder="0"
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelClass}>Faste utg./mnd</label>
+                    <input
+                      type="number" min={0} placeholder="0"
+                      value={fixedMonthlyCosts}
+                      onChange={(e) => setFixedMonthlyCosts(e.target.value === '' ? '' : Number(e.target.value))}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                {(annualRevenue !== null || totalCost !== null) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-gray-50 dark:bg-[#222] px-4 py-3">
+                      <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Omsetning</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white mt-0.5">{annualRevenue !== null ? fmtNok(annualRevenue) : '—'}</p>
+                      {hourlyRate !== '' && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{hourlyRate} kr/t × {workDays}d × 7.5t</p>}
+                    </div>
+                    <div className="rounded-xl bg-gray-50 dark:bg-[#222] px-4 py-3">
+                      <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Lønnskostnad</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white mt-0.5">{annualSalary !== null ? fmtNok(annualSalary) : '—'}</p>
+                      {monthlySalary !== '' && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{fmtNok(monthlySalary as number)}/mnd × 12</p>}
+                    </div>
+                    <div className="rounded-xl bg-gray-50 dark:bg-[#222] px-4 py-3">
+                      <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Faste utgifter</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white mt-0.5">{annualFixed !== null ? fmtNok(annualFixed) : '—'}</p>
+                      {fixedMonthlyCosts !== '' && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{fmtNok(fixedMonthlyCosts as number)}/mnd × 12</p>}
+                    </div>
+                    <div className={`rounded-xl px-4 py-3 ${profit !== null && profit >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                      <p className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">Fortjeneste</p>
+                      <p className={`text-lg font-semibold mt-0.5 ${profit !== null && profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {profit !== null ? fmtNok(profit) : '—'}
+                      </p>
+                      {margin !== null && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Margin: {margin.toFixed(1)}%</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {isInternal && (
             <div className="flex items-center gap-3">

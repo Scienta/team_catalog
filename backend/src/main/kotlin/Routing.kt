@@ -75,7 +75,8 @@ data class ConsultantCVResponse(
 fun Application.configureRouting(config: AppConfig) {
     install(StatusPages) {
         exception<Throwable> { call, cause ->
-            call.respondText(text = "500: $cause", status = HttpStatusCode.InternalServerError)
+            this@configureRouting.log.error("Unhandled exception", cause)
+            call.respondText(text = "500: Internal server error", status = HttpStatusCode.InternalServerError)
         }
     }
     routing {

@@ -9,6 +9,7 @@ import { ConsultantDetailPage } from './pages/ConsultantDetailPage'
 import { AdminsPage } from './pages/AdminsPage'
 import { ClientsPage } from './pages/ClientsPage'
 import { ClientDetailPage } from './pages/ClientDetailPage'
+import { TimelinePage } from './pages/TimelinePage'
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         />
         <Route path="/board" element={<ProtectedRoute><Layout><BoardPage /></Layout></ProtectedRoute>} />
         <Route path="/board/:clientId" element={<ProtectedRoute><Layout><BoardClientPage /></Layout></ProtectedRoute>} />
+        <Route path="/timeline" element={<ProtectedRoute><Layout><TimelinePage /></Layout></ProtectedRoute>} />
         <Route path="/clients" element={<ProtectedRoute><Layout><ClientsPage /></Layout></ProtectedRoute>} />
         <Route path="/clients/:id" element={<ProtectedRoute><Layout><ClientDetailPage /></Layout></ProtectedRoute>} />
         <Route
